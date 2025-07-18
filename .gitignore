@@ -4,3 +4,4 @@ dist/
 build/
 data/
 .venv/
+.ipynb_checkpoints/
