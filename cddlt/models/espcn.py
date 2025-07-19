@@ -1,9 +1,9 @@
 # Shi et al. (2016)
 
 import torch
-import dl_tools
+import cddlt
 
-class ESPCN(dl_tools.DLModule):
+class ESPCN(cddlt.DLModule):
     def __init__(self, n_channels: int, upscale_factor: int) -> None:
         super().__init__()
         self.model = torch.nn.Sequential(

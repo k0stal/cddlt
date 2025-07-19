@@ -1,0 +1,80 @@
+import os
+import argparse
+import shutil
+import tempfile
+import cddlt
+
+from cddlt.datasets.rekis_dataset import ReKIS
+from cddlt.datasets.cordex_dataset import CORDEX
+from cddlt.dataloaders.downscaling_transform import DownscalingTransform
+
+from generate_test_data import generate_random_climate_data, delete_dataset
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--batch_size", default=32, type=int)
+parser.add_argument("--epochs", default=30, type=int)
+parser.add_argument("--seed", default=42, type=int)
+parser.add_argument("--variables", default=["TM"], type=list)
+
+def main(args: argparse.Namespace) -> None:
+    cddlt.startup(args, os.path.basename(__file__))
+
+    tmp_root = tempfile.mkdtemp(prefix="cddlt_test_")
+    data_root = os.path.join(tmp_root, "data")
+    rekis_dir = os.path.join(data_root, "ReKIS")
+    cordex_dir = os.path.join(data_root, "CORDEX")
+    os.makedirs(rekis_dir, exist_ok=True)
+    os.makedirs(cordex_dir, exist_ok=True)
+
+    try:
+        # --- ReKIS dataset test ---
+        rekis_path = os.path.join(rekis_dir, "data.nc")
+        generate_random_climate_data(
+            output_path=rekis_path,
+            start_year=2000,
+            end_year=2003,
+            n_northing=400,
+            n_easting=400
+        )
+
+        rekis = ReKIS(
+            data_path=data_root,
+            variables=args.variables,
+            train_len=(2000, 2001),
+            dev_len=(2001, 2002),
+            test_len=(2002, 2003)
+        )
+
+        train = DownscalingTransform(rekis.train).dataloader(args.batch_size, shuffle=True)
+        dev = DownscalingTransform(rekis.dev).dataloader(args.batch_size)
+
+        delete_dataset(rekis_path)
+
+        # --- CORDEX dataset test ---
+        cordex_path = os.path.join(cordex_dir, "data.nc")
+        generate_random_climate_data(
+            output_path=cordex_path,
+            start_year=2002,
+            end_year=2005,
+            n_northing=400,
+            n_easting=400
+        )
+
+        cordex = CORDEX(
+            data_path=data_root,
+            variables=args.variables,
+            dev_len=(2002, 2003),
+            test_len=(2003, 2005)
+        )
+
+        dev = DownscalingTransform(cordex.dev).dataloader(args.batch_size)
+        test = DownscalingTransform(cordex.test).dataloader(args.batch_size)
+
+        delete_dataset(cordex_path)
+
+    finally:
+        shutil.rmtree(tmp_root)
+
+if __name__ == "__main__":
+    main_args = parser.parse_args([] if "__file__" not in globals() else None)
+    main(main_args)

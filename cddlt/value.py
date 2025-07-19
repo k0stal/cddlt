@@ -82,5 +82,5 @@ class VALUE:
     def _root_mean_squre_error(self) -> float:
         raise NotImplementedError()
 
-    def spearman_correlation(self) -> float:
+    def _spearman_correlation(self) -> float:
         raise NotImplementedError()

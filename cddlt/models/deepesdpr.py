@@ -1,7 +1,7 @@
 import torch
-import dl_tools
+import cddlt
 
-class DeepESDpr(dl_tools.DLModule):
+class DeepESDpr(cddlt.DLModule):
 
     """
     DeepESD model as proposed in Baño-Medina et al. 2024 for precipitation

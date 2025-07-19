@@ -18,9 +18,9 @@ class DLModule(torch.nn.Module):
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler.LRScheduler | None,
         loss: torch.nn.Module,
-        metrics: dict[str, torchmetrics.Metric] | None,
-        logdir: str | None,
-        device: str | None
+        metrics: dict[str, torchmetrics.Metric] | None = {},
+        logdir: str | None = "logs",
+        device: str | None = "auto"
     ) -> Self:
 
         self.optimizer = optimizer
@@ -53,7 +53,7 @@ class DLModule(torch.nn.Module):
         self.stop = False
         self.best_metric_val = 1e9 if eval_metric_asc == False else 0
         self.early_stop = early_stop
-        self.save_weights = save_weights
+        self._save_weights = save_weights
         self.stagnation = 0
 
         while self.epoch < epochs and not self.stop:
@@ -114,12 +114,12 @@ class DLModule(torch.nn.Module):
     ) -> None:
 
         with torch.no_grad():
+            x, y = x.to(self.device), y.to(self.device)
             y_pred = self(x)
             loss = self.loss(y_pred, y)
             self._update_loss(loss)
             self._update_metrics(y_pred, y)
             self._write_tb_log()
-
 
     def predict(
         self,
@@ -222,7 +222,7 @@ class DLModule(torch.nn.Module):
         if improved:
             self.best_metric_val = curr_metric
             self.stagnation = 0
-            self.save_weights(os.path.join(self.logdir, "best_weights.pt"))
+            if self._save_weights: self.save_weights(os.path.join(self.logdir, "best_weights.pt"))
         else:
             self.stagnation += 1
             self.stop = self.stagnation >= self.early_stop

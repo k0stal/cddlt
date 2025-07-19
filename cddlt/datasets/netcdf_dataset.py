@@ -14,12 +14,11 @@ class NetCDFDataset(torch.utils.data.Dataset):
         assert os.path.isdir(data_path), f"{data_path} is not a valid directory."
         
         self.data_path = Path(data_path)
-        self.interval = interval
         self.start_year, self.end_year = interval
         self.variables = variables
         
-        self.nc_files_nr = self._get_nc_files()
-        assert len(self.nc_files_nr) > 0, f"No NetCDF files found in {data_path}"
+        self.nc_files = self._get_nc_files()
+        assert len(self.nc_files) > 0, f"No NetCDF files found in {data_path}"
         self._load_data()
         
     def _get_nc_files(self) -> List[Path]:
@@ -30,27 +29,19 @@ class NetCDFDataset(torch.utils.data.Dataset):
         return sorted(nc_files)
     
     def _load_data(self):
-        datasets = []
         
-        print(f"Loading {len(self.nc_files)} NetCDF files...")
+        print(f"Loading {len(self.nc_files)} NetCDF file(s)...")
+
+        dataset = xr.open_mfdataset(
+            self.nc_files,
+            decode_coords="all",
+        )
         
-        for file_path in self.nc_files:
-            try:
-                ds = xr.open_dataset(file_path)                
-                datasets.append(ds)
-                
-            except Exception as e:
-                print(f"Warning: Failed to load {file_path}: {e}")
-                continue
-        
-        if not datasets:
+        if not dataset:
             raise RuntimeError("No datasets could be loaded successfully")
-        
-        combined_ds = xr.concat(datasets, dim='time', combine_attrs='drop_conflicts')
-        combined_ds = combined_ds.sortby('time')
     
-        time_mask = ((combined_ds.time.dt.year >= self.start_year) & (combined_ds.time.dt.year <= self.end_year))
-        filtered_ds = combined_ds.sel(time=time_mask)
+        time_mask = ((dataset.time.dt.year >= self.start_year) & (dataset.time.dt.year <= self.end_year))
+        filtered_ds = dataset.sel(time=time_mask)
         
         if len(filtered_ds.time) == 0:
             raise ValueError(f"No data found for years {self.start_year}-{self.end_year}")
@@ -61,9 +52,6 @@ class NetCDFDataset(torch.utils.data.Dataset):
         print(f"Loaded data shape: {dict(filtered_ds.dims)}")
         print(f"Time range: {pd.to_datetime(self.time_coords[0])} to {pd.to_datetime(self.time_coords[-1])}")
         print(f"Variables in dataset: {list(filtered_ds.data_vars.keys())}")
-        
-        for ds in datasets:
-            ds.close()
         
     def reset_variables(self, variables: List[str]) -> Self:
         self.variables = variables

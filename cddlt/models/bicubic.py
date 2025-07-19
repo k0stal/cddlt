@@ -1,7 +1,7 @@
 import torch
-import dlmodule
+import cddlt
 
-class Bicubic(dlmodule):
+class Bicubic(cddlt.DLModule):
     def __init__(self, upscale_factor: int) -> None:
         super().__init__()
         self.upsacle_factor = upscale_factor

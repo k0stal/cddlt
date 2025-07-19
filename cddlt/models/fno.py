@@ -1,7 +1,7 @@
-import dlmodule
+import cddlt
 import torch
 
-class SpectralConv2d(dlmodule):
+class SpectralConv2d(cddlt.DLModule):
     def __init__(self, in_channels: int, out_channels: int, modes1: int, modes2: int) -> None:
         super(SpectralConv2d, self).__init__()
 
@@ -40,7 +40,7 @@ class SpectralConv2d(dlmodule):
     def _complex_matmul(self, x, weights):
         return torch.einsum("bixy,ioxy->boxy", x, weights)
 
-class FNO(dlmodule):
+class FNO(cddlt.DLModule):
     def __init__(
         self, 
         n_channels: int, 

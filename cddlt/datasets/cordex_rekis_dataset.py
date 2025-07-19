@@ -2,7 +2,7 @@ import torch
 
 from typing import TypedDict, Set, Tuple, Self, List
 from pathlib import Path
-from dl_tools.datasets.netcdf_dataset import NetCDFDataset
+from cddlt.datasets.netcdf_dataset import NetCDFDataset
 
 """
 TODO: 

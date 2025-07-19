@@ -2,14 +2,7 @@ import torch
 
 from typing import TypedDict, Set, Tuple, Self, List
 from pathlib import Path
-from dl_tools.datasets.netcdf_dataset import NetCDFDataset
-
-"""
-TODO: 
-    - Maybe add two list of variables (not SuperResolution approach):
-        1) variables to predict from
-    - potentially include other file formats.
-"""
+from cddlt.datasets.netcdf_dataset import NetCDFDataset
 
 class ReKIS:
 
@@ -26,22 +19,22 @@ class ReKIS:
     SETS_NAMES: Set[str] = {"train", "dev"}
     
     """Datasets of the ERA5_ReKIS dataset."""
-    DATASET_NAMES: Set[str] = {"ReKIS"}
+    DATASET_NAME: str = "ReKIS"
 
     """Upscaling factor to match CORDEX"""
-    UPSCALE_FACTOR: int = ...
+    UPSCALE_FACTOR: int = 10 # tmp
 
     """The type of a single dataset element."""
     class Element(TypedDict):
         input: torch.Tensor
         target: torch.Tensor
 
-    class Datset(NetCDFDataset):
+    class Dataset(NetCDFDataset):
         def __init__(self, data_path: str, interval: Tuple[int, int], variables: List[str]) -> None:
             super().__init__(data_path, interval, variables)
 
         def __getitem__(self, index: int) -> "ReKIS.Element":
-            item = self().__getitem__(index)
+            item = super().__getitem__(index)
             return self._upscale(item), item
 
         def __len__(self) -> int:
@@ -52,13 +45,14 @@ class ReKIS:
             return self
         
         def _upscale(self, item: torch.Tensor) -> torch.Tensor:
+            # tmp
             upscaled = torch.nn.functional.interpolate(
-                item,
-                scale_factor=self.UPSCALE_FACTOR ** -1,
+                item.unsqueeze(0),
+                scale_factor=ReKIS.UPSCALE_FACTOR ** -1,
                 mode="bicubic",
                 antialias=True,
             )
-            return upscaled
+            return upscaled.squeeze(0)
 
     def __init__(
         self, 
@@ -67,23 +61,27 @@ class ReKIS:
         variables: List[str],
         train_len: Tuple[int, int],
         dev_len: Tuple[int, int],
+        test_len: Tuple[int, int]
     ) -> None:
         
-        assert variables in self.VARIABLES, f"Selected variables are not supported, select from: {self.AVAILABLE_VARIABLES.keys}"
+        assert all(var in self.AVAILABLE_VARIABLES for var in variables), f"Selected variables are not supported, select from: {self.AVAILABLE_VARIABLES}"
         self.variables = variables
 
-        intervals = [train_len, dev_len]
+        intervals = [train_len, dev_len, test_len]
         for interval in intervals:
-            assert interval[0] >= self.AVILABLE_YEARS and interval[1] <= self.AVILABLE_YEARS, f"Selected years must be a subset of: {self.AVILABLE_YEARS}"    
+            assert interval[0] >= self.AVILABLE_YEARS[0] and interval[1] <= self.AVILABLE_YEARS[1], f"Selected years must be a subset of: {self.AVILABLE_YEARS}"    
 
         for dataset, interval in zip(self.SETS_NAMES, intervals):
-            datset_path = Path(data_path) / self.DATASET_NAMES[0]
-            setattr(self, dataset, self.Datset(datset_path, self.variables, interval))
+            datset_path = Path(data_path) / self.DATASET_NAME
+            setattr(self, dataset, self.Dataset(datset_path, interval, self.variables))
 
-        print(f"CORDEX_ReKIS dataset initalized.\ntrain size: ({len(self.train)})\ndev size: ({len(self.dev)})")
+        print(f"ReKIS dataset initalized.\ntrain size: ({len(self.train)})\ndev size: ({len(self.dev)})")
 
     """Train dataset."""
-    train: Datset
+    train: Dataset
 
     """Eval dataset."""
-    dev: Datset
+    dev: Dataset
+
+    """Test dataset."""
+    test: Dataset

@@ -1,7 +1,7 @@
-import dlmodule
+import cddlt
 import torch
 
-class SRCNN(dlmodule):
+class SRCNN(cddlt.DLModule):
     def __init__(self, n_channels: int, upscale_factor: int) -> None:
         super().__init__()
 

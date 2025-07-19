@@ -1,7 +1,7 @@
 import torch
-import dl_tools
+import cddlt
 
-class DeepESDtas(dl_tools.DLModule):
+class DeepESDtas(cddlt.DLModule):
 
     """
     DeepESD model as proposed in Baño-Medina et al. 2024 for temperature
