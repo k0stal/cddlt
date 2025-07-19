@@ -156,12 +156,12 @@ class DLModule(torch.nn.Module):
 
     def load_weights(
         self,
-        path: str,
+        model_path: str,
         device: torch.device | None = "auto"
     ) -> Self:
         if not self.device:
             self.device = self._get_auto_device() if device == "auto" else torch.device(device)
-        self.load_state_dict(torch.load(path, map_location=self.device))
+        self.load_state_dict(torch.load(os.path.join(model_path, "best_weights.pt"), map_location=self.device))
 
 
     def _reset_loss(self) -> None:
