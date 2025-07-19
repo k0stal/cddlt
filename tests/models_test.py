@@ -98,9 +98,11 @@ def main(args: argparse.Namespace) -> None:
 
         # together with the rekis.test will be used for VALUE framework evaulation
         dev_pred = espcn.predict(cordex_dev)
+        print(f"First dev_pred sample shape: {dev_pred[0].shape}")
 
         # future climate prediction downscaled
-        test_pred = espcn.predict(cordex_test)    
+        test_pred = espcn.predict(cordex_test)
+        print(f"First test_pred sample shape: {test_pred[0].shape}")  
 
         delete_dataset(rekis_path)
         delete_dataset(cordex_path)
