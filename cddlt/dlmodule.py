@@ -157,7 +157,7 @@ class DLModule(torch.nn.Module):
     def load_weights(
         self,
         path: str,
-        device: torch.device | None
+        device: torch.device | None = "auto"
     ) -> Self:
         if not self.device:
             self.device = self._get_auto_device() if device == "auto" else torch.device(device)
