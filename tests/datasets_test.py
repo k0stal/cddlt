@@ -16,6 +16,12 @@ parser.add_argument("--epochs", default=30, type=int)
 parser.add_argument("--seed", default=42, type=int)
 parser.add_argument("--variables", default=["TM"], type=list)
 
+"""
+#TODO
+    - modify testing scenario
+    - test sample and batch transformations
+"""
+
 def main(args: argparse.Namespace) -> None:
     cddlt.startup(args, os.path.basename(__file__))
 
