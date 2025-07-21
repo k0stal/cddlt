@@ -1,16 +1,17 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
+import rioxarray
 import os
 
 def generate_random_climate_data(
     output_path: str,
-    start_year: int = 2000,
-    end_year: int = 2002,
-    n_northing: int = 400,
-    n_easting: int = 400,
+    start_date: str,
+    end_date: str,
+    n_northing: str,
+    n_easting: str
 ):
-    time = pd.date_range(f"{start_year}-01-01", f"{end_year}-12-31", freq="D")
+    time = pd.date_range(start_date, end_date, freq="D")
     easting = np.linspace(4.336e6, 4.752e6, n_easting)
     northing = np.linspace(5.954e6, 5.554e6, n_northing)
 
@@ -46,6 +47,10 @@ def generate_random_climate_data(
                 "long_name": meta["long_name"]
             }
         )
+
+        da = da.rio.set_spatial_dims(x_dim="easting", y_dim="northing", inplace=False)
+        da = da.rio.write_crs("EPSG:31468", inplace=False)
+
         data_vars[var] = da
 
     crs = xr.DataArray(
@@ -59,7 +64,6 @@ def generate_random_climate_data(
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     ds.to_netcdf(output_path, format="NETCDF4")
     print(f"Saved dummy dataset to: {output_path}")
-
 
 def delete_dataset(path: str):
     if os.path.exists(path):

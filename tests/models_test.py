@@ -4,8 +4,8 @@ import torchmetrics
 import argparse
 import shutil
 import tempfile
-
 import cddlt
+
 from cddlt.datasets.rekis_dataset import ReKIS
 from cddlt.datasets.cordex_dataset import CORDEX
 from cddlt.dataloaders.downscaling_transform import DownscalingTransform
@@ -38,8 +38,8 @@ def main(args: argparse.Namespace) -> None:
         rekis_path = os.path.join(rekis_dir, "data.nc")
         generate_random_climate_data(
             output_path=rekis_path,
-            start_year=2000,
-            end_year=2003,
+            start_date="2000-01-01",
+            end_date="2000-02-01",
             n_northing=400,
             n_easting=400
         )
@@ -48,19 +48,20 @@ def main(args: argparse.Namespace) -> None:
         rekis = ReKIS(
             data_path=data_root,
             variables=args.variables,
-            train_len=(2000, 2001),
-            dev_len=(2001, 2002),
-            test_len=(2002, 2003)
+            train_len=("2000-01-01", "2000-01-15"),
+            dev_len=("2000-01-15", "2000-01-20"),
+            test_len=("2000-01-20", "2000-02-01"),
+            resampling="cubic_spline"
         )
 
-        rekis_train = DownscalingTransform(rekis.train).dataloader(args.batch_size, shuffle=True)
-        rekis_dev = DownscalingTransform(rekis.dev).dataloader(args.batch_size)
+        rekis_train = DownscalingTransform(dataset=rekis.train).dataloader(args.batch_size, shuffle=True)
+        rekis_dev = DownscalingTransform(dataset=rekis.dev).dataloader(args.batch_size)
 
         cordex_path = os.path.join(cordex_dir, "data.nc")
         generate_random_climate_data(
             output_path=cordex_path,
-            start_year=2002,
-            end_year=2004,
+            start_date="2000-01-20",
+            end_date="2002-03-01",
             n_northing=40,
             n_easting=40
         )
@@ -71,8 +72,9 @@ def main(args: argparse.Namespace) -> None:
         cordex = CORDEX(
             data_path=data_root,
             variables=args.variables,
-            dev_len=(2002, 2003),
-            test_len=(2003, 2004)
+            dev_len=("2000-01-15", "2000-01-20"),
+            test_len=("2000-01-20", "2002-03-01"),
+            resampling="cubic_spline"
         )
 
         cordex_dev = DownscalingTransform(cordex.dev).dataloader(args.batch_size)
