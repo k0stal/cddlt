@@ -1,11 +1,6 @@
 import torch
 from typing import Type, Dict, Union, Any, List, Tuple, Optional, Callable
 
-"""
-#TODO
-    - add workers to dataloader method.
-"""
-
 class DownscalingTransform:
     def __init__(
         self, 
@@ -24,8 +19,6 @@ class DownscalingTransform:
         sample = self.dataset[index]
         return self.transform(sample)
     
-    ## transform from [batch_size, channels, lat, lon] -> [batch_size, grid_size] 
-    ## assuming we will always be modeling single variable?
     def default_transform(self, sample: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
         return sample['input'], sample['target']
 
@@ -34,10 +27,11 @@ class DownscalingTransform:
         targets = torch.stack([item[1] for item in batch])
         return images, targets
 
-    def dataloader(self, batch_size: int, shuffle: bool = False) -> torch.utils.data.DataLoader:
+    def dataloader(self, batch_size: int, shuffle: bool = False, num_workers: int = 0) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
             self.dataset, 
             batch_size=batch_size, 
             shuffle=shuffle,
-            collate_fn=self.collate_fn
+            collate_fn=self.collate_fn,
+            num_workers=num_workers
         )

@@ -6,10 +6,6 @@ import argparse
 import datetime
 import numpy as np
 
-"""
-Maybe create logdir per model, not per startup?.
-"""
-
 def startup(
     args: argparse.Namespace,
     script_name: str
