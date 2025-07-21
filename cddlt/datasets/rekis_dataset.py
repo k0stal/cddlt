@@ -21,9 +21,6 @@ class ReKIS:
     """Datasets of the ERA5_ReKIS dataset."""
     DATASET_NAME: str = "ReKIS"
 
-    """Upscaling factor to match CORDEX"""
-    UPSCALE_FACTOR: int = 10 # tmp
-
     """The type of a single dataset element."""
     class Element(TypedDict):
         input: torch.Tensor
@@ -35,7 +32,7 @@ class ReKIS:
 
         def __getitem__(self, index: int) -> "ReKIS.Element":
             item = super().__getitem__(index)
-            return self._upscale(item), item
+            return item, item
 
         def __len__(self) -> int:
             return super().__len__()
