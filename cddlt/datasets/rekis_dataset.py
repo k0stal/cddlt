@@ -40,16 +40,6 @@ class ReKIS:
         def select(self, variables: List[str]) -> Self:
             self().reset_variables(variables)
             return self
-        
-        def _upscale(self, item: torch.Tensor) -> torch.Tensor:
-            # tmp
-            upscaled = torch.nn.functional.interpolate(
-                item.unsqueeze(0),
-                scale_factor=ReKIS.UPSCALE_FACTOR ** -1,
-                mode="bicubic",
-                antialias=True,
-            )
-            return upscaled.squeeze(0)
 
     def __init__(
         self, 
