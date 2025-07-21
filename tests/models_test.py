@@ -24,6 +24,13 @@ parser.add_argument("--lr", default=0.001, type=float)
 parser.add_argument("--logdir", default="logs", type=str)
 parser.add_argument("--variables", default=["TM"], type=list)
 
+"""
+TODO: test
+    - all other model implementaitons.
+    - reproject funciton
+    - tensorboard writing
+"""
+
 def main(args: argparse.Namespace) -> None:
     cddlt.startup(args, os.path.basename(__file__))
 
