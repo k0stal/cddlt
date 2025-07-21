@@ -30,7 +30,8 @@ pip install .
 
 ## Usage
 
-`cddlt.DLModule` supports high-level interface. First of all we have to `configure` our model.
+`cddlt.DLModule` supports high-level interface. 
+First of all we have to `configure` our model.
 
 ```
 model.configure(
