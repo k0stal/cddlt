@@ -56,4 +56,20 @@ model.fit(
 )
 ```
 
+The `cddlt.DLModule` stores best model weights by default to the log file. After the training is finished we can load the weights `load_weights`
+
+```
+model.load_weights(...)
+```
+
+and provided the test dataloader use the model for prediction.
+
+```
+predictions = model.predict(...)
+```
+
 #TBD
+
+- VALUE framework
+- Dataset usage
+- loss functions
