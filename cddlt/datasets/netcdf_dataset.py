@@ -1,25 +1,77 @@
 import torch
 import os
+import rasterio
 import xarray as xr
 import numpy as np
-from typing import List, Tuple, Self
-from pathlib import Path
 import pandas as pd
+import pandas as pd
+
+from typing import List, Tuple, Self, Callable
+from pathlib import Path
 
 class NetCDFDataset(torch.utils.data.Dataset):
     SUFFIXES: List[str] = [".nc", ".nc4"]
+
+    @staticmethod
+    def _cnv_date(date: str) -> pd.Timestamp:
+        try:
+            return pd.to_datetime(date)
+        except ValueError as e:
+            raise ValueError(f"Invalid date format: {e}. Expected format is {format}.") from e
     
-    def __init__(self, data_path: str, interval: Tuple[int, int], variables: List[str]):
+    def __init__(
+        self, 
+        data_path: str, 
+        interval: Tuple[str, str], 
+        variables: List[str], 
+    ):
         super().__init__()
         assert os.path.isdir(data_path), f"{data_path} is not a valid directory."
         
         self.data_path = Path(data_path)
-        self.start_year, self.end_year = interval
+        start_date, end_date = interval
+        self.start_date, self.end_date = self._cnv_date(start_date), self._cnv_date(end_date)
         self.variables = variables
         
         self.nc_files = self._get_nc_files()
         assert len(self.nc_files) > 0, f"No NetCDF files found in {data_path}"
         self._load_data()
+
+        self.input = None
+        self.targets = None
+  
+    def reset_variables(self, variables: List[str]) -> Self:
+        self.variables = variables
+        return self
+    
+    ### how much make the slicing process accessible when creating ReKIS object instance?
+    ### should the data be prepared beforehand?
+
+    def slice_data(self) -> None:
+        self.dataset = self.dataset.isel(
+            easting=slice(0, 400),
+            northing=slice(0, 400)
+        )
+
+    def reproject(
+        self,
+        reproject_fn: Callable[[xr.DataArray], xr.DataArray],
+        split_target: bool = False
+    ) -> None:
+        self.split_target = split_target
+        self.dataset.rio.set_spatial_dims("easting", "northing")
+        self.input = reproject_fn(self.dataset)
+        self.target = self.dataset if self.split_target else self.input
+
+    def convert_kelvin_to_celsius(self) -> None:
+        return NotImplementedError()
+
+    @staticmethod
+    def _get_resampling_enum(method: str) -> rasterio.enums.Resampling:
+        try:
+            return getattr(rasterio.enums.Resampling, method)
+        except AttributeError:
+            raise ValueError(f"{method} is not a valid resampling method.")
         
     def _get_nc_files(self) -> List[Path]:
         nc_files = []
@@ -29,7 +81,6 @@ class NetCDFDataset(torch.utils.data.Dataset):
         return sorted(nc_files)
     
     def _load_data(self):
-        
         print(f"Loading {len(self.nc_files)} NetCDF file(s)...")
 
         dataset = xr.open_mfdataset(
@@ -40,11 +91,11 @@ class NetCDFDataset(torch.utils.data.Dataset):
         if not dataset:
             raise RuntimeError("No datasets could be loaded successfully")
     
-        time_mask = ((dataset.time.dt.year >= self.start_year) & (dataset.time.dt.year <= self.end_year))
+        time_mask = ((dataset.time >= self.start_date) & (dataset.time <= self.end_date))
         filtered_ds = dataset.sel(time=time_mask)
         
         if len(filtered_ds.time) == 0:
-            raise ValueError(f"No data found for years {self.start_year}-{self.end_year}")
+            raise ValueError(f"No data found for dates {self.start_date}-{self.end_date}")
         
         self.dataset = filtered_ds
         self.time_coords = filtered_ds.time.values
@@ -52,17 +103,9 @@ class NetCDFDataset(torch.utils.data.Dataset):
         print(f"Loaded data shape: {dict(filtered_ds.dims)}")
         print(f"Time range: {pd.to_datetime(self.time_coords[0])} to {pd.to_datetime(self.time_coords[-1])}")
         print(f"Variables in dataset: {list(filtered_ds.data_vars.keys())}")
-        
-    def reset_variables(self, variables: List[str]) -> Self:
-        self.variables = variables
-        return self
-    
-    def __getitem__(self, index: int) -> torch.Tensor:
 
-        if index < 0 or index >= len(self.time_coords):
-            raise IndexError(f"Index {index} out of bounds.")
-        
-        time_slice = self.dataset.isel(time = index)
+    def _stack_sample(self, dataset: xr, index: int) -> torch.Tensor:
+        time_slice = dataset.isel(time = index)
         time_slice = time_slice[self.variables]
         
         if len(time_slice.data_vars) == 1:
@@ -78,6 +121,15 @@ class NetCDFDataset(torch.utils.data.Dataset):
             data_array = np.stack(arrays, axis=0)
         
         return torch.tensor(data_array, dtype=torch.float32)
+    
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        if index < 0 or index >= len(self.time_coords):
+            raise IndexError(f"Index {index} out of bounds.")
+        
+        inputs = self._stack_sample(self.inputs, index)
+        targets = self._stack_sample(self.targets, index) if self.split_target else inputs
+
+        return inputs, targets
     
     def __len__(self) -> int:
         return len(self.time_coords)
