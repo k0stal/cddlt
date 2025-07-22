@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools >= 77.0.3"]
+requires = ["setuptools >= 77.0.3", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cddlt"
-version = "1.0.0"
+dynamic = ["version"]
 authors = [
     {name = "Petr Kostal", email = "kostape4@cvut.cz"},
 ]
@@ -12,14 +12,13 @@ maintainers = [
     {name = "Petr Kostal", email = "kostape4@cvut.cz"},
 ]
 description = "Climate downscaling deep learning tools."
-readme = {file = "README.txt", content-type = "text/markdown"}
+readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.8"
 keywords = ["climate downscaling", "super resolution", "deep learning", "machine learning"]
-license = "MIT AND (Apache-2.0 OR BSD-2-Clause)"
+license = { file = "LICENSE" }
 dependencies = [
     "numpy==1.26.4",
     "pandas==2.2.2",
-    "setuptools==68.0.0",
     "timm==1.0.17",
     "torch==2.3.0",
     "tensorboard>=2.10",
@@ -35,3 +34,5 @@ dependencies = [
 
 [tool.setuptools.packages]
 find = {} 
+
+[tool.setuptools_scm]
