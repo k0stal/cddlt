@@ -11,7 +11,6 @@ from cddlt.datasets.cordex_dataset import CORDEX
 from cddlt.dataloaders.downscaling_transform import DownscalingTransform
 
 from cddlt.models.espcn import ESPCN
-
 from generate_test_data import generate_random_climate_data, delete_dataset
 
 parser = argparse.ArgumentParser()
@@ -23,13 +22,6 @@ parser.add_argument("--upscale_factor", default=10, type=int)
 parser.add_argument("--lr", default=0.001, type=float)
 parser.add_argument("--logdir", default="logs", type=str)
 parser.add_argument("--variables", default=["TM"], type=list)
-
-"""
-TODO: test
-    - all other model implementaitons.
-    - reproject funciton
-    - tensorboard writing
-"""
 
 def main(args: argparse.Namespace) -> None:
     cddlt.startup(args, os.path.basename(__file__))
@@ -46,7 +38,7 @@ def main(args: argparse.Namespace) -> None:
         generate_random_climate_data(
             output_path=rekis_path,
             start_date="2000-01-01",
-            end_date="2000-02-01",
+            end_date="2000-04-01",
             n_northing=400,
             n_easting=400
         )
@@ -55,37 +47,14 @@ def main(args: argparse.Namespace) -> None:
         rekis = ReKIS(
             data_path=data_root,
             variables=args.variables,
-            train_len=("2000-01-01", "2000-01-15"),
-            dev_len=("2000-01-15", "2000-01-20"),
-            test_len=("2000-01-20", "2000-02-01"),
+            train_len=("2000-01-01", "2000-02-01"),
+            dev_len=("2000-02-01", "2000-03-01"),
+            test_len=("2000-03-01", "2000-04-01"),
             resampling="cubic_spline"
         )
 
         rekis_train = DownscalingTransform(dataset=rekis.train).dataloader(args.batch_size, shuffle=True)
         rekis_dev = DownscalingTransform(dataset=rekis.dev).dataloader(args.batch_size)
-
-        cordex_path = os.path.join(cordex_dir, "data.nc")
-        generate_random_climate_data(
-            output_path=cordex_path,
-            start_date="2000-01-20",
-            end_date="2002-03-01",
-            n_northing=40,
-            n_easting=40
-        )
-
-        # cordex dataset for prediction
-        # the dev length of rekis dataset must match the test length of cordex dataset
-        # this period will be used for VALUE farmework evalution
-        cordex = CORDEX(
-            data_path=data_root,
-            variables=args.variables,
-            dev_len=("2000-01-15", "2000-01-20"),
-            test_len=("2000-01-20", "2002-03-01"),
-            resampling="cubic_spline"
-        )
-
-        cordex_dev = DownscalingTransform(cordex.dev).dataloader(args.batch_size)
-        cordex_test = DownscalingTransform(cordex.test).dataloader(args.batch_size)
 
         espcn = ESPCN(
             n_channels = 1,
@@ -104,6 +73,29 @@ def main(args: argparse.Namespace) -> None:
         # loading best weights and final evaluation
         espcn.load_weights(args.logdir)
         espcn.evaluate(rekis_dev)
+
+        cordex_path = os.path.join(cordex_dir, "data.nc")
+        generate_random_climate_data(
+            output_path=cordex_path,
+            start_date="2000-03-01",
+            end_date="2000-06-01",
+            n_northing=40,
+            n_easting=40
+        )
+
+        # cordex dataset for prediction
+        # the dev length of rekis dataset must match the test length of cordex dataset
+        # this period will be used for VALUE farmework evalution
+        cordex = CORDEX(
+            data_path=data_root,
+            variables=args.variables,
+            dev_len=("2000-03-01", "2000-04-01"),
+            test_len=("2000-04-01", "2000-06-01"),
+            resampling="cubic_spline"
+        )
+
+        cordex_dev = DownscalingTransform(cordex.dev).dataloader(args.batch_size)
+        cordex_test = DownscalingTransform(cordex.test).dataloader(args.batch_size)
 
         # together with the rekis.test will be used for VALUE framework evaulation
         dev_pred = espcn.predict(cordex_dev)

@@ -11,16 +11,14 @@ from cddlt.dataloaders.downscaling_transform import DownscalingTransform
 from generate_test_data import generate_random_climate_data, delete_dataset
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--batch_size", default=32, type=int)
-parser.add_argument("--epochs", default=30, type=int)
+parser.add_argument("--batch_size", default=8, type=int)
+parser.add_argument("--epochs", default=2, type=int)
 parser.add_argument("--seed", default=42, type=int)
+parser.add_argument("--threads", default=4, type=int)
+parser.add_argument("--upscale_factor", default=10, type=int)
+parser.add_argument("--lr", default=0.001, type=float)
+parser.add_argument("--logdir", default="logs", type=str)
 parser.add_argument("--variables", default=["TM"], type=list)
-
-"""
-#TODO
-    - modify testing scenario
-    - test sample and batch transformations
-"""
 
 def main(args: argparse.Namespace) -> None:
     cddlt.startup(args, os.path.basename(__file__))
@@ -37,18 +35,20 @@ def main(args: argparse.Namespace) -> None:
         rekis_path = os.path.join(rekis_dir, "data.nc")
         generate_random_climate_data(
             output_path=rekis_path,
-            start_year=2000,
-            end_year=2003,
+            start_date="2000-01-01",
+            end_date="2000-04-01",
             n_northing=400,
             n_easting=400
         )
 
+        # rekis dataset for evaluation
         rekis = ReKIS(
             data_path=data_root,
             variables=args.variables,
-            train_len=(2000, 2001),
-            dev_len=(2001, 2002),
-            test_len=(2002, 2003)
+            train_len=("2000-01-01", "2000-02-01"),
+            dev_len=("2000-02-01", "2000-03-01"),
+            test_len=("2000-03-01", "2000-04-01"),
+            resampling="cubic_spline"
         )
 
         train = DownscalingTransform(rekis.train).dataloader(args.batch_size, shuffle=True)
@@ -60,17 +60,18 @@ def main(args: argparse.Namespace) -> None:
         cordex_path = os.path.join(cordex_dir, "data.nc")
         generate_random_climate_data(
             output_path=cordex_path,
-            start_year=2002,
-            end_year=2005,
-            n_northing=400,
-            n_easting=400
+            start_date="2000-03-01",
+            end_date="2000-06-01",
+            n_northing=40,
+            n_easting=40
         )
 
         cordex = CORDEX(
             data_path=data_root,
             variables=args.variables,
-            dev_len=(2002, 2003),
-            test_len=(2003, 2005)
+            dev_len=("2000-03-01", "2000-04-01"),
+            test_len=("2000-04-01", "2000-06-01"),
+            resampling="cubic_spline"
         )
 
         dev = DownscalingTransform(cordex.dev).dataloader(args.batch_size)
