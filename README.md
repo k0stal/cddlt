@@ -16,13 +16,13 @@ Package also includes prepared *PyTorch* dataset interfaces for `ReKIS` and `COR
 
 This package is available on PyPI and can be installed via pip
 
-```
+``` bash
 pip install cddlt
 ```
 
 or from source.
 
-```
+``` bash
 git clone https://github.com/k0stal/cddlt
 cd cddlt
 pip install .
@@ -33,7 +33,7 @@ pip install .
 `cddlt.DLModule` supports high-level interface. 
 First of all we have to `configure` our model.
 
-```
+``` python
 model.configure(
     optimizer = ...,
     scheduler = ...,
@@ -47,7 +47,7 @@ model.configure(
 
 After configuration, provided traning and validation dataloaders, we can train our model using the `fit` method. Trainig process, loss curves and metrics are automatically stored to `TensorBoard`.
 
-```
+``` python
 model.fit(
     train_loader = ...,
     dev_loader = ...,
@@ -58,13 +58,13 @@ model.fit(
 
 The `cddlt.DLModule` stores best model weights by default to the log file. After the training is finished we can load the weights `load_weights`
 
-```
+``` python
 model.load_weights(...)
 ```
 
 and provided the test dataloader use the model for prediction.
 
-```
+``` python
 predictions = model.predict(...)
 ```
 
