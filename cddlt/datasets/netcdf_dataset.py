@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pandas as pd
 
-from typing import List, Tuple, Self, Callable
+from typing import List, Tuple, Self, Callable, Set
 from pathlib import Path
 
 class NetCDFDataset(torch.utils.data.Dataset):
@@ -18,6 +18,13 @@ class NetCDFDataset(torch.utils.data.Dataset):
             return pd.to_datetime(date)
         except ValueError as e:
             raise ValueError(f"Invalid date format: {e}. Expected format is {format}.") from e
+        
+    @staticmethod
+    def _get_resampling_enum(method: str) -> rasterio.enums.Resampling:
+        try:
+            return getattr(rasterio.enums.Resampling, method)
+        except AttributeError:
+            raise ValueError(f"{method} is not a valid resampling method.")
     
     def __init__(
         self, 
@@ -37,7 +44,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
         assert len(self.nc_files) > 0, f"No NetCDF files found in {data_path}"
         self._load_data()
 
-        self.input = None
+        self.inputs = None
         self.targets = None
   
     def reset_variables(self, variables: List[str]) -> Self:
@@ -53,25 +60,22 @@ class NetCDFDataset(torch.utils.data.Dataset):
             northing=slice(0, 400)
         )
 
+    def set_spatial_dims(self) -> None:
+        self.dataset.rio.set_spatial_dims("easting", "northing")
+
     def reproject(
         self,
         reproject_fn: Callable[[xr.DataArray], xr.DataArray],
         split_target: bool = False
     ) -> None:
         self.split_target = split_target
-        self.dataset.rio.set_spatial_dims("easting", "northing")
-        self.input = reproject_fn(self.dataset)
-        self.target = self.dataset if self.split_target else self.input
+        self.inputs = reproject_fn(self.dataset)
+        self.targets = self.dataset if self.split_target else self.inputs
 
-    def convert_kelvin_to_celsius(self) -> None:
-        return NotImplementedError()
-
-    @staticmethod
-    def _get_resampling_enum(method: str) -> rasterio.enums.Resampling:
-        try:
-            return getattr(rasterio.enums.Resampling, method)
-        except AttributeError:
-            raise ValueError(f"{method} is not a valid resampling method.")
+    def convert_kelvin_to_celsius(self, variables: Set[str]) -> None:
+        for var_name in self.dataset.data_vars:
+            if var_name in variables:
+                self.dataset[var_name] = self.dataset[var_name] - 273.15
         
     def _get_nc_files(self) -> List[Path]:
         nc_files = []
@@ -91,7 +95,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
         if not dataset:
             raise RuntimeError("No datasets could be loaded successfully")
     
-        time_mask = ((dataset.time >= self.start_date) & (dataset.time <= self.end_date))
+        time_mask = ((dataset.time >= self.start_date) & (dataset.time < self.end_date))
         filtered_ds = dataset.sel(time=time_mask)
         
         if len(filtered_ds.time) == 0:
@@ -126,10 +130,10 @@ class NetCDFDataset(torch.utils.data.Dataset):
         if index < 0 or index >= len(self.time_coords):
             raise IndexError(f"Index {index} out of bounds.")
         
-        inputs = self._stack_sample(self.inputs, index)
-        targets = self._stack_sample(self.targets, index) if self.split_target else inputs
+        input = self._stack_sample(self.inputs, index)
+        target = self._stack_sample(self.targets, index) if self.split_target else input
 
-        return inputs, targets
+        return input, target
     
     def __len__(self) -> int:
         return len(self.time_coords)

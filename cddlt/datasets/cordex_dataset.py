@@ -5,7 +5,6 @@ import pandas as pd
 import xarray as xr
 
 from typing import TypedDict, Set, Tuple, List, Self, Callable
-from pathlib import Path
 from cddlt.datasets.netcdf_dataset import NetCDFDataset
 
 class CORDEX:
@@ -15,6 +14,9 @@ class CORDEX:
 
     """Supported variables."""
     AVAILABLE_VARIABLES: Set[str] = {"PR", "TM", "TN", "TX"}
+
+    """Temperature variables."""
+    TEMP_VARIABLES: Set[str] = {"TM", "TN", "TX"}
 
     """Data range."""
     RANGE_AVAILABLE: Tuple[str] = ("1979-01-01", "2023-12-31")
@@ -26,6 +28,7 @@ class CORDEX:
     DATASET_NAME: str = "CORDEX"
 
     """Transformation function."""
+    @staticmethod
     def REPROJECT_FN(method: str) -> Callable[[xr.DataArray], xr.DataArray]:
         try:
             res_method = getattr(rasterio.enums.Resampling, method)
@@ -43,7 +46,6 @@ class CORDEX:
     
     @staticmethod
     def _cmp_time_str(a: str, b: str) -> bool:
-        print(a)
         try:
             return pd.to_datetime(a) >= pd.to_datetime(b)
         except ValueError as e:
@@ -91,10 +93,10 @@ class CORDEX:
                 f"End date {end} must be <= {self.RANGE_AVAILABLE[1]}"
 
         for dataset, interval in zip(self.SETS_NAMES, intervals):
-            dataset_path = Path(data_path) / self.DATASET_NAME
-            dataset_obj = self.Dataset(dataset_path, interval, self.variables)
+            #dataset_path = Path(data_path) / self.DATASET_NAME
+            dataset_obj = self.Dataset(data_path, interval, self.variables)
+            dataset_obj.convert_kelvin_to_celsius(self.TEMP_VARIABLES)
             dataset_obj.reproject(self.REPROJECT_FN(resampling), split_target=False)
-            dataset_obj.convert_kelvin_to_celsius()
             setattr(self, dataset, dataset_obj)
 
         print(f"CORDEX dataset initalized.\ndev size: ({len(self.dev)})\ntest size: ({len(self.test)})")
