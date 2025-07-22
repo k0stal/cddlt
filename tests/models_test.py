@@ -38,7 +38,7 @@ def main(args: argparse.Namespace) -> None:
         generate_random_climate_data(
             output_path=rekis_path,
             start_date="2000-01-01",
-            end_date="2000-04-01",
+            end_date="2000-10-01",
             n_northing=400,
             n_easting=400
         )
@@ -47,9 +47,9 @@ def main(args: argparse.Namespace) -> None:
         rekis = ReKIS(
             data_path=data_root,
             variables=args.variables,
-            train_len=("2000-01-01", "2000-02-01"),
-            dev_len=("2000-02-01", "2000-03-01"),
-            test_len=("2000-03-01", "2000-04-01"),
+            train_len=("2000-01-01", "2000-05-01"),
+            dev_len=("2000-05-01", "2000-07-01"),
+            test_len=("2000-07-01", "2000-10-01"),
             resampling="cubic_spline"
         )
 
