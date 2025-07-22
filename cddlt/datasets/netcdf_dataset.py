@@ -93,6 +93,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
                 variables.append(tensor)
 
             tensor_data = torch.cat(variables, dim=1)
+            print(f"Shape of {attr_name}: {tensor_data.shape}")
             setattr(self, attr_name, tensor_data)
             
     def _get_nc_files(self) -> List[Path]:
