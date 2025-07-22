@@ -2,11 +2,10 @@ import torch
 import os
 import rasterio
 import xarray as xr
-import numpy as np
 import pandas as pd
 import pandas as pd
 
-from typing import List, Tuple, Self, Callable, Set
+from typing import List, Tuple, Callable, Set
 from pathlib import Path
 
 class NetCDFDataset(torch.utils.data.Dataset):
@@ -47,10 +46,6 @@ class NetCDFDataset(torch.utils.data.Dataset):
         self.inputs = None
         self.targets = None
   
-    def reset_variables(self, variables: List[str]) -> Self:
-        self.variables = variables
-        return self
-    
     ### how much make the slicing process accessible when creating ReKIS object instance?
     ### should the data be prepared beforehand?
 
@@ -69,14 +64,37 @@ class NetCDFDataset(torch.utils.data.Dataset):
         split_target: bool = False
     ) -> None:
         self.split_target = split_target
-        self.inputs = reproject_fn(self.dataset)
-        self.targets = self.dataset if self.split_target else self.inputs
+
+        ### inputs are reprojected, targets are not modified
+        if split_target:
+            self.inputs = reproject_fn(self.dataset)
+            self.targets = self.dataset
+
+        ### both inputs and targets are reprojected
+        else:
+            for var_name in self.dataset.data_vars: 
+                self.dataset[var_name] = reproject_fn(self.dataset[var_name])
+            self.inputs = self.dataset
+            self.targets = self.dataset
 
     def convert_kelvin_to_celsius(self, variables: Set[str]) -> None:
         for var_name in self.dataset.data_vars:
             if var_name in variables:
                 self.dataset[var_name] = self.dataset[var_name] - 273.15
-        
+
+    def convert_to_tensors(self) -> None:
+        for attr_name in ['inputs', 'targets']:
+            print(attr_name)
+            attr = getattr(self, attr_name)
+            variables = []
+
+            for var_name in attr.data_vars:
+                tensor = torch.from_numpy(attr[var_name].values).unsqueeze(1)
+                variables.append(tensor)
+
+            tensor_data = torch.cat(variables, dim=1)
+            setattr(self, attr_name, tensor_data)
+            
     def _get_nc_files(self) -> List[Path]:
         nc_files = []
         for file_path in self.data_path.rglob("*"):
@@ -97,6 +115,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
     
         time_mask = ((dataset.time >= self.start_date) & (dataset.time < self.end_date))
         filtered_ds = dataset.sel(time=time_mask)
+        filtered_ds = filtered_ds[self.variables]
         
         if len(filtered_ds.time) == 0:
             raise ValueError(f"No data found for dates {self.start_date}-{self.end_date}")
@@ -107,31 +126,13 @@ class NetCDFDataset(torch.utils.data.Dataset):
         print(f"Loaded data shape: {dict(filtered_ds.dims)}")
         print(f"Time range: {pd.to_datetime(self.time_coords[0])} to {pd.to_datetime(self.time_coords[-1])}")
         print(f"Variables in dataset: {list(filtered_ds.data_vars.keys())}")
-
-    def _stack_sample(self, dataset: xr, index: int) -> torch.Tensor:
-        time_slice = dataset.isel(time = index)
-        time_slice = time_slice[self.variables]
-        
-        if len(time_slice.data_vars) == 1:
-            var_name = list(time_slice.data_vars.keys())[0]
-            data_array = time_slice[var_name].values
-            if data_array.ndim == 2:
-                data_array = data_array[np.newaxis, ...]
-        else:
-            arrays = []
-            for var_name in time_slice.data_vars:
-                var_array = time_slice[var_name].values
-                arrays.append(var_array)
-            data_array = np.stack(arrays, axis=0)
-        
-        return torch.tensor(data_array, dtype=torch.float32)
     
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         if index < 0 or index >= len(self.time_coords):
             raise IndexError(f"Index {index} out of bounds.")
         
-        input = self._stack_sample(self.inputs, index)
-        target = self._stack_sample(self.targets, index) if self.split_target else input
+        input = self.inputs[index]
+        target = self.targets[index] if self.split_target else input
 
         return input, target
     

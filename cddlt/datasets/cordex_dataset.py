@@ -22,7 +22,7 @@ class CORDEX:
     RANGE_AVAILABLE: Tuple[str] = ("1979-01-01", "2023-12-31")
 
     """Subsets of the CORDEX dataset."""
-    SETS_NAMES: Set[str] = {"dev", "test"}
+    SETS_NAMES: Set[str] = ["dev", "test"]
     
     """Datasets of the CORDEX dataset."""
     DATASET_NAME: str = "CORDEX"
@@ -67,10 +67,6 @@ class CORDEX:
 
         def __len__(self) -> int:
             return super().__len__()
-        
-        def select(self, variables: List[str]) -> Self:
-            self().reset_variables(variables)
-            return self
 
     def __init__(
         self, 
@@ -97,6 +93,7 @@ class CORDEX:
             dataset_obj = self.Dataset(data_path, interval, self.variables)
             dataset_obj.convert_kelvin_to_celsius(self.TEMP_VARIABLES)
             dataset_obj.reproject(self.REPROJECT_FN(resampling), split_target=False)
+            dataset_obj.convert_to_tensors()
             setattr(self, dataset, dataset_obj)
 
         print(f"CORDEX dataset initalized.\ndev size: ({len(self.dev)})\ntest size: ({len(self.test)})")

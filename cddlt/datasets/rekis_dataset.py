@@ -24,7 +24,7 @@ class ReKIS:
     RANGE_AVAILABLE: Tuple[str] = ("1979-01-01", "2023-12-31")
 
     """Subsets of the ERA5_ReKIS dataset."""
-    SETS_NAMES: Set[str] = {"train", "dev", "test"}
+    SETS_NAMES: List[str] = ["train", "dev", "test"]
     
     """Datasets of the ERA5_ReKIS dataset."""
     DATASET_NAME: str = "ReKIS"
@@ -72,10 +72,6 @@ class ReKIS:
 
         def __len__(self) -> int:
             return super().__len__()
-        
-        def select(self, variables: List[str]) -> Self:
-            self().reset_variables(variables)
-            return self
 
     def __init__(
         self, 
@@ -104,6 +100,7 @@ class ReKIS:
             dataset_obj.slice_data()
             dataset_obj.set_spatial_dims()
             dataset_obj.reproject(self.REPROJECT_FN(resampling), split_target=True)
+            dataset_obj.convert_to_tensors()
             setattr(self, dataset, dataset_obj)
 
         print(f"ReKIS dataset initalized.\ntrain size: ({len(self.train)})\ndev size: ({len(self.dev)})\ntest size: ({len(self.test)})")
