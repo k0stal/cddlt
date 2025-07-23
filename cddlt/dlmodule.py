@@ -1,4 +1,5 @@
 import os
+import time
 import torch
 import torchmetrics
 import torch.utils.tensorboard
@@ -15,9 +16,9 @@ class DLModule(torch.nn.Module):
 
     def configure(
         self,
-        optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler.LRScheduler | None,
         loss: torch.nn.Module,
+        optimizer: torch.optim.Optimizer = None,
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
         metrics: dict[str, torchmetrics.Metric] | None = {},
         logdir: str | None = "logs",
         device: str | None = "auto"
@@ -58,6 +59,8 @@ class DLModule(torch.nn.Module):
 
         while self.epoch < epochs and not self.stop:
             self.epoch += 1
+            start = time.time()
+
             self.train()
             self._reset_loss()
             self._reset_metrics()
@@ -70,8 +73,11 @@ class DLModule(torch.nn.Module):
                 for name, metric in self.metrics.items():
                     print(f"train_{name}: {metric.compute():.4f}")
 
+            train_loss = self.average_loss
             self.evaluate(dev_loader)
             self._eval_stop_and_weights()
+
+            print(f"Epoch {self.epoch}/{epochs} - train_loss: {train_loss:.4}, dev_loss: {self.average_loss:.4} ({time.time() - start:.2}s)")
 
     def train_step(
         self,
@@ -95,6 +101,7 @@ class DLModule(torch.nn.Module):
     def evaluate(
         self,
         dataloader: torch.utils.data.DataLoader,
+        log_loss: bool = False
     ) -> None:
 
         self.eval()
@@ -106,6 +113,8 @@ class DLModule(torch.nn.Module):
 
         for name, metric in self.metrics.items():
             print(f"dev_{name}: {metric.compute().item():.4f}")
+
+        if log_loss: print(f"Evaluation - dev_loss: {self.average_loss:.4}")
 
     def eval_step(
         self,
@@ -225,7 +234,7 @@ class DLModule(torch.nn.Module):
             if self._save_weights: self.save_weights(os.path.join(self.logdir, "best_weights.pt"))
         else:
             self.stagnation += 1
-            self.stop = self.stagnation >= self.early_stop
+            self.stop = self.stagnation >= self.early_stop if self.early_stop else False
 
     @staticmethod
     def _get_auto_device() -> torch.device:
