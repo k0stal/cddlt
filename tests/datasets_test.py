@@ -11,8 +11,8 @@ from cddlt.dataloaders.downscaling_transform import DownscalingTransform
 from generate_test_data import generate_random_climate_data, delete_dataset
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--batch_size", default=8, type=int)
-parser.add_argument("--epochs", default=2, type=int)
+parser.add_argument("--batch_size", default=2, type=int)
+parser.add_argument("--epochs", default=30, type=int)
 parser.add_argument("--seed", default=42, type=int)
 parser.add_argument("--threads", default=4, type=int)
 parser.add_argument("--upscale_factor", default=10, type=int)

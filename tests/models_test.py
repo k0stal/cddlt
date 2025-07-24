@@ -2,114 +2,165 @@ import os
 import torch
 import torchmetrics
 import argparse
-import shutil
-import tempfile
 import cddlt
 
 from cddlt.datasets.rekis_dataset import ReKIS
 from cddlt.datasets.cordex_dataset import CORDEX
 from cddlt.dataloaders.downscaling_transform import DownscalingTransform
 
+from cddlt.models.bicubic import Bicubic
+from cddlt.models.srcnn import SRCNN
 from cddlt.models.espcn import ESPCN
-from generate_test_data import generate_random_climate_data, delete_dataset
+from cddlt.models.fno import FNO
+# from cddlt.models.swinir import SwinIR
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--batch_size", default=8, type=int)
-parser.add_argument("--epochs", default=2, type=int)
+parser.add_argument("--batch_size", default=4, type=int)
+parser.add_argument("--epochs", default=5, type=int)
 parser.add_argument("--seed", default=42, type=int)
 parser.add_argument("--threads", default=4, type=int)
 parser.add_argument("--upscale_factor", default=10, type=int)
 parser.add_argument("--lr", default=0.001, type=float)
 parser.add_argument("--logdir", default="logs", type=str)
-parser.add_argument("--variables", default=["TM"], type=list)
+parser.add_argument("--variables", default=["TM", "TX", "TN"], type=list)
+
+DATA_PATH = "/Users/petr/Documents/projects/cddlt/data"
 
 def main(args: argparse.Namespace) -> None:
     cddlt.startup(args, os.path.basename(__file__))
 
-    tmp_root = tempfile.mkdtemp(prefix="cddlt_test_")
-    data_root = os.path.join(tmp_root, "data")
-    rekis_dir = os.path.join(data_root, "ReKIS")
-    cordex_dir = os.path.join(data_root, "CORDEX")
-    os.makedirs(rekis_dir, exist_ok=True)
-    os.makedirs(cordex_dir, exist_ok=True)
+    rekis = ReKIS(
+        data_path=f"{DATA_PATH}/rekis",
+        variables=args.variables,
+        train_len=("2000-01-01", "2000-01-10"),
+        dev_len=("2000-01-10", "2000-01-20"),
+        test_len=("2000-01-20", "2000-02-01"),
+        resampling="cubic_spline"
+    )
 
-    try:
-        rekis_path = os.path.join(rekis_dir, "data.nc")
-        generate_random_climate_data(
-            output_path=rekis_path,
-            start_date="2000-01-01",
-            end_date="2000-10-01",
-            n_northing=400,
-            n_easting=400
-        )
+    rekis_train = DownscalingTransform(dataset=rekis.train).dataloader(args.batch_size, shuffle=True)
+    rekis_dev = DownscalingTransform(dataset=rekis.dev).dataloader(args.batch_size)
 
-        # rekis dataset for evaluation
-        rekis = ReKIS(
-            data_path=data_root,
-            variables=args.variables,
-            train_len=("2000-01-01", "2000-05-01"),
-            dev_len=("2000-05-01", "2000-07-01"),
-            test_len=("2000-07-01", "2000-10-01"),
-            resampling="cubic_spline"
-        )
+    cordex = CORDEX(
+        data_path=f"{DATA_PATH}/cordex",
+        variables=args.variables,
+        dev_len=("2000-01-20", "2000-02-01"),
+        test_len=("2000-02-01", "2000-03-01")
+    )
 
-        rekis_train = DownscalingTransform(dataset=rekis.train).dataloader(args.batch_size, shuffle=True)
-        rekis_dev = DownscalingTransform(dataset=rekis.dev).dataloader(args.batch_size)
+    cordex_dev = DownscalingTransform(dataset=cordex.dev).dataloader(args.batch_size)
+    cordex_test = DownscalingTransform(dataset=cordex.test).dataloader(args.batch_size)
 
-        espcn = ESPCN(
-            n_channels = 1,
-            upscale_factor = args.upscale_factor
-        )
+    ### Bicubic
 
-        espcn.configure(
-            optimizer = torch.optim.Adam(params=espcn.parameters(), lr=args.lr),
-            scheduler = None,
-            loss = torchmetrics.MeanSquaredError(squared=False),
-            logdir = args.logdir,
-        )
+    bicubic = Bicubic(
+        upscale_factor=args.upscale_factor
+    )
 
-        espcn.fit(rekis_train, rekis_dev, args.epochs)
+    bicubic.configure(
+        loss = torchmetrics.MeanSquaredError(squared=False),
+        device = "cpu"
+    )
 
-        # loading best weights and final evaluation
-        espcn.load_weights(args.logdir)
-        espcn.evaluate(rekis_dev)
+    print(f"--- Bicubic ---")
 
-        cordex_path = os.path.join(cordex_dir, "data.nc")
-        generate_random_climate_data(
-            output_path=cordex_path,
-            start_date="2000-03-01",
-            end_date="2000-06-01",
-            n_northing=40,
-            n_easting=40
-        )
+    bicubic.evaluate(rekis_dev, log_loss=True)
 
-        # cordex dataset for prediction
-        # the dev length of rekis dataset must match the test length of cordex dataset
-        # this period will be used for VALUE farmework evalution
-        cordex = CORDEX(
-            data_path=data_root,
-            variables=args.variables,
-            dev_len=("2000-03-01", "2000-04-01"),
-            test_len=("2000-04-01", "2000-06-01"),
-            resampling="cubic_spline"
-        )
+    ### SRCNN
 
-        cordex_dev = DownscalingTransform(cordex.dev).dataloader(args.batch_size)
-        cordex_test = DownscalingTransform(cordex.test).dataloader(args.batch_size)
+    srcnn = SRCNN(
+        n_channels=3,
+        upscale_factor=args.upscale_factor,
+    )
 
-        # together with the rekis.test will be used for VALUE framework evaulation
-        dev_pred = espcn.predict(cordex_dev)
-        print(f"First dev_pred sample shape: {dev_pred[0].shape}")
+    srcnn.configure(
+        optimizer = torch.optim.Adam(params=srcnn.parameters(), lr=args.lr),
+        loss = torchmetrics.MeanSquaredError(squared=False),
+        logdir = args.logdir,
+        device = "cpu"
+    )
 
-        # future climate prediction downscaled
-        test_pred = espcn.predict(cordex_test)
-        print(f"First test_pred sample shape: {test_pred[0].shape}")  
+    print(f"--- SRCNN ---")
 
-        delete_dataset(rekis_path)
-        delete_dataset(cordex_path)
+    srcnn.fit(rekis_train, rekis_dev, args.epochs)
 
-    finally:
-        shutil.rmtree(tmp_root)
+    srcnn.load_weights(args.logdir)
+    srcnn.evaluate(rekis_dev, log_loss=True)
+
+    ### ESPCN
+
+    espcn = ESPCN(
+        n_channels = 3,
+        upscale_factor = args.upscale_factor
+    )
+
+    espcn.configure(
+        optimizer = torch.optim.Adam(params=espcn.parameters(), lr=args.lr),
+        scheduler = None,
+        loss = torchmetrics.MeanSquaredError(squared=False),
+        logdir = args.logdir,
+    )
+
+    print(f"--- ESPCN ---")
+
+    espcn.fit(rekis_train, rekis_dev, args.epochs)
+
+    espcn.load_weights(args.logdir)
+    espcn.evaluate(rekis_dev, log_loss=True)
+
+    ### FNO
+
+    fno = FNO(
+        n_channels=3,
+        upscale_factor=args.upscale_factor
+    )
+
+    fno.configure(
+        optimizer = torch.optim.Adam(params=fno.parameters(), lr=args.lr),
+        scheduler = None,
+        loss = torchmetrics.MeanSquaredError(squared=False),
+        logdir = args.logdir,
+        device="cpu"
+    )
+
+    print(f"--- FNO ---")
+
+    fno.fit(rekis_train, rekis_dev, args.epochs)
+
+    fno.load_weights(args.logdir)
+    fno.evaluate(rekis_dev, log_loss=True)
+
+    ### cordex eval
+
+    dev_predict = fno.predict(cordex_dev)
+    test_predict = fno.predict(cordex_test)
+
+    print(f"cordex dev predict shape: {dev_predict[0].shape}")
+    print(f"cordex test predict shape: {test_predict[0].shape}")
+
+    ### SwinIR
+
+    # swin = SwinIR(
+    #     img_size=40,
+    #     in_chans=1,
+    #     upscale=10 ## fix, implementaiton supports only 3 / 2^n upsacling factors
+    # )
+
+    # swin.configure(
+    #     optimizer = torch.optim.Adam(params=fno.parameters(), lr=args.lr),
+    #     scheduler = None,
+    #     loss = torchmetrics.MeanSquaredError(squared=False),
+    #     logdir = args.logdir,
+    #     device="cpu"
+    # )
+
+    # print(f"--- SWIN ---")
+
+    # swin.fit(rekis_train, rekis_dev, args.epochs)
+
+    # swin.load_weights(args.logdir)
+    # swin.evaluate(rekis_dev, log_loss=True)
+
 
 if __name__ == "__main__":
     main_args = parser.parse_args([] if "__file__" not in globals() else None)
