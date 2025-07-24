@@ -3,7 +3,7 @@ import rasterio
 import xarray as xr
 import pandas as pd
 
-from typing import TypedDict, Set, Tuple, Self, List, Callable
+from typing import TypedDict, Set, Tuple, List, Callable
 from pathlib import Path
 from cddlt.datasets.netcdf_dataset import NetCDFDataset
 
@@ -21,7 +21,7 @@ class ReKIS:
     AVAILABLE_VARIABLES: Set[str] = {"PR", "TM", "TN", "TX"}
 
     """Data range."""
-    RANGE_AVAILABLE: Tuple[str] = ("1979-01-01", "2023-12-31")
+    RANGE_AVAILABLE: Tuple[str] = ("1961-01-01", "2024-01-01")
 
     """Subsets of the ERA5_ReKIS dataset."""
     SETS_NAMES: List[str] = ["train", "dev", "test"]
@@ -37,7 +37,7 @@ class ReKIS:
         except AttributeError:
             raise ValueError(f"{method} is not a valid resampling method.")
         
-        def reproject_fn(data: xr.DataArray) -> xr.DataArray:
+        def reproject_fn(data: xr.DataArray) -> xr.DataArray: ### possibility of paralelization: num_threads arg
             return data.rio.reproject(
                 data.rio.crs,
                 resolution=(10_000, 10_000),
@@ -97,13 +97,11 @@ class ReKIS:
         for dataset, interval in zip(self.SETS_NAMES, intervals):
             #dataset_path = Path(data_path) / self.DATASET_NAME
             dataset_obj = self.Dataset(data_path, interval, self.variables)
-            dataset_obj.slice_data()
-            dataset_obj.set_spatial_dims()
-            dataset_obj.reproject(self.REPROJECT_FN(resampling), split_target=True)
+            dataset_obj.reproject(self.REPROJECT_FN(resampling))
             dataset_obj.convert_to_tensors()
             setattr(self, dataset, dataset_obj)
 
-        print(f"ReKIS dataset initalized.\ntrain size: ({len(self.train)})\ndev size: ({len(self.dev)})\ntest size: ({len(self.test)})")
+        print(f"\nReKIS dataset initalized.\ntrain size: ({len(self.train)})\ndev size: ({len(self.dev)})\ntest size: ({len(self.test)})\n")
 
     """Train dataset."""
     train: Dataset
