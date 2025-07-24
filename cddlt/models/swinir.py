@@ -10,6 +10,7 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
+import cddlt
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -614,8 +615,8 @@ class UpsampleOneStep(nn.Sequential):
         flops = H * W * self.num_feat * 3 * 9
         return flops
 
-
-class SwinIR(nn.Module):
+# nn.Module
+class SwinIR(cddlt.DLModule):
     r""" SwinIR
         A PyTorch impl of : `SwinIR: Image Restoration Using Swin Transformer`, based on Swin Transformer.
 

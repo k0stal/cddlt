@@ -94,4 +94,4 @@ class FNO(cddlt.DLModule):
 
         # [B, W, H, C] to [B, C, W, H]
         x = x.permute(0, 3, 1, 2)
-        return x
+        return x.contiguous()
