@@ -47,7 +47,11 @@ class DLModule(torch.nn.Module):
         eval_metric_asc: bool = False
     ) -> None:
 
-        assert eval_metric == 'loss' or eval_metric in self.metrics.keys(), f"Invalid evaluation metric: {eval_metric}"
+        assert eval_metric == 'loss' or eval_metric in self.metrics.keys(), f"Invalid evaluation metric: {eval_metric}."
+        assert self.optimizer != None and \
+            self.loss != None and \
+            self.device != None, f"Model has to be configured before calling fit()."
+
         self.eval_metric = eval_metric
         self.eval_metric_asc = eval_metric_asc
 
@@ -77,7 +81,7 @@ class DLModule(torch.nn.Module):
             self.evaluate(dev_loader)
             self._eval_stop_and_weights()
 
-            print(f"Epoch {self.epoch}/{epochs} - train_loss: {train_loss:.4}, dev_loss: {self.average_loss:.4} ({time.time() - start:.2}s)")
+            print(f"Epoch {self.epoch}/{epochs} - train_loss: {train_loss:.4f}, dev_loss: {self.average_loss:.4f} ({time.time() - start:.2f}s)")
 
     def train_step(
         self,
