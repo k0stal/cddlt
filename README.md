@@ -97,8 +97,8 @@ When creating a `ReKIS` dataset instance, you can select the corresponding date 
 
 ``` python
 rekis = ReKIS(
-    data_path=f"{DATA_PATH}/rekis",
-    variables=args.variables,
+    data_path=...,
+    variables=["TM"],
     train_len=("2000-01-01", "2000-01-10"),
     dev_len=("2000-01-10", "2000-01-20"),
     test_len=("2000-01-20", "2000-02-01"),
@@ -112,8 +112,8 @@ A `CORDEX` dataset instance is created analogously:
 
 ``` python
 cordex = CORDEX(
-    data_path=f"{DATA_PATH}/cordex",
-    variables=args.variables,
+    data_path=...,
+    variables=["TM"],
     dev_len=("2000-01-20", "2000-02-01"),
     test_len=("2000-02-01", "2000-03-01")
 )
