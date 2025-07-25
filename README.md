@@ -80,7 +80,7 @@ The following models are currently implemented:
   [Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network (Shi et al., 2016)](https://arxiv.org/abs/1609.05158)
 - **DeepESDpr**
   [Downscaling multi-model climate projection ensembles with deep learning (DeepESD)](https://doi.org/10.5194/gmd-15-6747-2022)
-- **DeepESD
+- **DeepESD**
   [Downscaling multi-model climate projection ensembles with deep learning (DeepESD)](https://doi.org/10.5194/gmd-15-6747-2022)
 - **FNO** (Fourier Neural Operator)  
   [Fourier Neural Operator for Parametric Partial Differential Equations (Li et al., 2021)](https://arxiv.org/abs/2010.08895)
