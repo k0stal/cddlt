@@ -80,7 +80,7 @@ The following models are currently implemented:
   [Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network (Shi et al., 2016)](https://arxiv.org/abs/1609.05158)
 - **DeepESDpr**
   [Downscaling multi-model climate projection ensembles with deep learning (DeepESD)](https://doi.org/10.5194/gmd-15-6747-2022)
-- **DeepESD
+- **DeepESD**
   [Downscaling multi-model climate projection ensembles with deep learning (DeepESD)](https://doi.org/10.5194/gmd-15-6747-2022)
 - **FNO** (Fourier Neural Operator)  
   [Fourier Neural Operator for Parametric Partial Differential Equations (Li et al., 2021)](https://arxiv.org/abs/2010.08895)
@@ -97,8 +97,8 @@ When creating a `ReKIS` dataset instance, you can select the corresponding date 
 
 ``` python
 rekis = ReKIS(
-    data_path=f"{DATA_PATH}/rekis",
-    variables=args.variables,
+    data_path=...,
+    variables=["TM"],
     train_len=("2000-01-01", "2000-01-10"),
     dev_len=("2000-01-10", "2000-01-20"),
     test_len=("2000-01-20", "2000-02-01"),
@@ -112,8 +112,8 @@ A `CORDEX` dataset instance is created analogously:
 
 ``` python
 cordex = CORDEX(
-    data_path=f"{DATA_PATH}/cordex",
-    variables=args.variables,
+    data_path=...,
+    variables=["TM"],
     dev_len=("2000-01-20", "2000-02-01"),
     test_len=("2000-02-01", "2000-03-01")
 )
