@@ -8,19 +8,19 @@ A utility package for climate downscaling using a single-image super-resolution 
 
 ## Overview
 
-CDDLT is a high level interface for traning and testing climate downscaling deep learning models. Package comes with preimplemented models commonly used for super-resolution such as: `SRCNN`, `ESPCN`, `DeepESDpr`, `DeepESDtas` and `FNO`.
+CDDLT is a high-level interface for training and testing deep learning models for climate downscaling. The package includes pre-implemented models commonly used for super-resolution, such as `SRCNN`, `ESPCN`, `DeepESDpr`, `DeepESDtas`, and `FNO`.
 
-Package also includes prepared *PyTorch* dataset interfaces for `ReKIS` and `CORDEX`.
+It also provides ready-to-use PyTorch dataset interfaces for `ReKIS` and `CORDEX`.
 
 ## Installation
 
-This package is available on PyPI and can be installed via pip
+This package is available on PyPI and can be installed via pip:
 
 ``` bash
 pip install cddlt
 ```
 
-or from source.
+Or from source:
 
 ``` bash
 git clone https://github.com/k0stal/cddlt
@@ -30,8 +30,8 @@ pip install .
 
 ## Usage
 
-`cddlt.DLModule` supports high-level interface. 
-First of all we have to `configure` our model.
+`cddlt.DLModule` provides a high-level interface.
+First, configure the model:
 
 ``` python
 model.configure(
@@ -45,7 +45,7 @@ model.configure(
 )
 ```
 
-After configuration, provided traning and validation dataloaders, we can train our model using the `fit` method. Trainig process, loss curves and metrics are automatically stored to `TensorBoard`.
+After configuring the model and providing training and validation dataloaders, you can train it using the `fit` method. The training process, including loss curves and metrics, is automatically logged to `TensorBoard`.
 
 ``` python
 model.fit(
@@ -56,20 +56,73 @@ model.fit(
 )
 ```
 
-The `cddlt.DLModule` stores best model weights by default to the log file. After the training is finished we can load the weights `load_weights`
+`cddlt.DLModule` saves the best model weights by default to the log directory.
+Once training is complete, load the weights using `load_weights`
 
 ``` python
 model.load_weights(...)
 ```
 
-and provided the test dataloader use the model for prediction.
+Then, provide the test dataloader and use the model for prediction:
 
 ``` python
 predictions = model.predict(...)
 ```
 
-#TBD
+## Models
 
-- VALUE framework
-- Dataset usage
-- loss functions
+The following models are currently implemented:
+
+- **Bicubic Interpolation** – Baseline for stochastic upscaling.
+- **SRCNN** (Super-Resolution Convolutional Neural Network)  
+  [Learning a Deep Convolutional Network for Image Super-Resolution (Dong et al., 2016)](https://arxiv.org/abs/1501.00092)
+- **ESPCN** (Efficient Sub-Pixel Convolutional Neural Network)  
+  [Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network (Shi et al., 2016)](https://arxiv.org/abs/1609.05158)
+- **DeepESDpr**
+  [Downscaling multi-model climate projection ensembles with deep learning (DeepESD)](https://doi.org/10.5194/gmd-15-6747-2022)
+- **DeepESD
+  [Downscaling multi-model climate projection ensembles with deep learning (DeepESD)](https://doi.org/10.5194/gmd-15-6747-2022)
+- **FNO** (Fourier Neural Operator)  
+  [Fourier Neural Operator for Parametric Partial Differential Equations (Li et al., 2021)](https://arxiv.org/abs/2010.08895)
+- **SwinIR**
+  [SwinIR: Image Restoration Using Swin Transformer](https://arxiv.org/abs/2108.10257)
+
+## Datasets
+
+The module includes prepared dataloaders for `ReKIS` and `CORDEX` datasets, assuming the underlying data is in a specified (TBD) NetCDF format.
+
+### ReKIS
+
+When creating a `ReKIS` dataset instance, you can select the corresponding date ranges, variables to predict, and the resampling method used when upscaling the high-resolution image:
+
+``` python
+rekis = ReKIS(
+    data_path=f"{DATA_PATH}/rekis",
+    variables=args.variables,
+    train_len=("2000-01-01", "2000-01-10"),
+    dev_len=("2000-01-10", "2000-01-20"),
+    test_len=("2000-01-20", "2000-02-01"),
+    resampling="cubic_spline"
+)
+```
+
+### CORDEX
+
+A `CORDEX` dataset instance is created analogously:
+
+``` python
+cordex = CORDEX(
+    data_path=f"{DATA_PATH}/cordex",
+    variables=args.variables,
+    dev_len=("2000-01-20", "2000-02-01"),
+    test_len=("2000-02-01", "2000-03-01")
+)
+```
+
+### Notes
+
+See the testing scenarios for example usage.
+
+#TBD
+- implement VALUE framework for evaulation
+- additional loss functions
