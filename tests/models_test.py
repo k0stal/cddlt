@@ -16,18 +16,18 @@ from cddlt.models.fno import FNO
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", default=4, type=int)
-parser.add_argument("--epochs", default=5, type=int)
+parser.add_argument("--epochs", default=3, type=int)
 parser.add_argument("--seed", default=42, type=int)
 parser.add_argument("--threads", default=4, type=int)
 parser.add_argument("--upscale_factor", default=10, type=int)
 parser.add_argument("--lr", default=0.001, type=float)
 parser.add_argument("--logdir", default="logs", type=str)
-parser.add_argument("--variables", default=["TM", "TX", "TN"], type=list)
+parser.add_argument("--variables", default=["TM"], type=list)
 
-DATA_PATH = "/Users/petr/Documents/projects/cddlt/data"
+DATA_PATH = "..."
 
 def main(args: argparse.Namespace) -> None:
-    cddlt.startup(args, os.path.basename(__file__))
+    cddlt.startup(args)
 
     rekis = ReKIS(
         data_path=f"{DATA_PATH}/rekis",
@@ -59,24 +59,25 @@ def main(args: argparse.Namespace) -> None:
 
     bicubic.configure(
         loss = torchmetrics.MeanSquaredError(squared=False),
+        args = args,
         device = "cpu"
     )
 
     print(f"--- Bicubic ---")
 
-    bicubic.evaluate(rekis_dev, log_loss=True)
+    bicubic.evaluate(rekis_dev, print_loss=True, epochs=args.epochs)
 
-    ### SRCNN
+    # ### SRCNN
 
     srcnn = SRCNN(
-        n_channels=3,
+        n_channels=1,
         upscale_factor=args.upscale_factor,
     )
 
     srcnn.configure(
         optimizer = torch.optim.Adam(params=srcnn.parameters(), lr=args.lr),
         loss = torchmetrics.MeanSquaredError(squared=False),
-        logdir = args.logdir,
+        args = args,
         device = "cpu"
     )
 
@@ -84,13 +85,13 @@ def main(args: argparse.Namespace) -> None:
 
     srcnn.fit(rekis_train, rekis_dev, args.epochs)
 
-    srcnn.load_weights(args.logdir)
-    srcnn.evaluate(rekis_dev, log_loss=True)
+    srcnn.load_weights(os.path.join(args.logdir, srcnn.model_name))
+    srcnn.evaluate(rekis_dev, print_loss=True)
 
     ### ESPCN
 
     espcn = ESPCN(
-        n_channels = 3,
+        n_channels = 1,
         upscale_factor = args.upscale_factor
     )
 
@@ -98,20 +99,20 @@ def main(args: argparse.Namespace) -> None:
         optimizer = torch.optim.Adam(params=espcn.parameters(), lr=args.lr),
         scheduler = None,
         loss = torchmetrics.MeanSquaredError(squared=False),
-        logdir = args.logdir,
+        args = args
     )
 
     print(f"--- ESPCN ---")
 
     espcn.fit(rekis_train, rekis_dev, args.epochs)
 
-    espcn.load_weights(args.logdir)
-    espcn.evaluate(rekis_dev, log_loss=True)
+    espcn.load_weights(os.path.join(args.logdir, espcn.model_name))
+    espcn.evaluate(rekis_dev, print_loss=True)
 
     ### FNO
 
     fno = FNO(
-        n_channels=3,
+        n_channels=1,
         upscale_factor=args.upscale_factor
     )
 
@@ -119,7 +120,7 @@ def main(args: argparse.Namespace) -> None:
         optimizer = torch.optim.Adam(params=fno.parameters(), lr=args.lr),
         scheduler = None,
         loss = torchmetrics.MeanSquaredError(squared=False),
-        logdir = args.logdir,
+        args = args,
         device="cpu"
     )
 
@@ -127,8 +128,8 @@ def main(args: argparse.Namespace) -> None:
 
     fno.fit(rekis_train, rekis_dev, args.epochs)
 
-    fno.load_weights(args.logdir)
-    fno.evaluate(rekis_dev, log_loss=True)
+    fno.load_weights(os.path.join(args.logdir, fno.model_name))
+    fno.evaluate(rekis_dev, print_loss=True)
 
     ### cordex eval
 
