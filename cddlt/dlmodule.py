@@ -1,8 +1,11 @@
 import os
+import re
 import time
 import torch
+import argparse
 import torchmetrics
 import torch.utils.tensorboard
+import datetime
 import tqdm
 
 from typing import Self
@@ -20,7 +23,7 @@ class DLModule(torch.nn.Module):
         optimizer: torch.optim.Optimizer = None,
         scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
         metrics: dict[str, torchmetrics.Metric] | None = {},
-        logdir: str | None = "logs",
+        args: argparse.Namespace = {},
         device: str | None = "auto"
     ) -> Self:
 
@@ -29,8 +32,8 @@ class DLModule(torch.nn.Module):
         self.loss = loss
         self.metrics = metrics if metrics is not None else {}
         self.device = self._get_auto_device() if device == "auto" else torch.device(device)
+        self._create_log_name(args)
         self.epoch = 0
-        self.logdir = logdir
         self._tb_writers = {}
         self.to(self.device)
 
@@ -78,7 +81,9 @@ class DLModule(torch.nn.Module):
                     print(f"train_{name}: {metric.compute():.4f}")
 
             train_loss = self.average_loss
+            self._write_tb_log()
             self.evaluate(dev_loader)
+            self._write_tb_log()
             self._eval_stop_and_weights()
 
             print(f"Epoch {self.epoch}/{epochs} - train_loss: {train_loss:.4f}, dev_loss: {self.average_loss:.4f} ({time.time() - start:.2f}s)")
@@ -100,12 +105,12 @@ class DLModule(torch.nn.Module):
             self.scheduler is not None and self.scheduler.step()
             self._update_loss(loss)
             self._update_metrics(y_pred, y)
-            self._write_tb_log()
 
     def evaluate(
         self,
         dataloader: torch.utils.data.DataLoader,
-        log_loss: bool = False
+        print_loss: bool = False,
+        epochs: int = 0,
     ) -> None:
 
         self.eval()
@@ -118,7 +123,11 @@ class DLModule(torch.nn.Module):
         for name, metric in self.metrics.items():
             print(f"dev_{name}: {metric.compute().item():.4f}")
 
-        if log_loss: print(f"Evaluation - dev_loss: {self.average_loss:.4}")
+        if print_loss: print(f"Evaluation - dev_loss: {self.average_loss:.4}")
+        
+        while self.epoch < epochs:
+            self.epoch += 1
+            self._write_tb_log()
 
     def eval_step(
         self,
@@ -132,7 +141,6 @@ class DLModule(torch.nn.Module):
             loss = self.loss(y_pred, y)
             self._update_loss(loss)
             self._update_metrics(y_pred, y)
-            self._write_tb_log()
 
     def predict(
         self,
@@ -160,11 +168,12 @@ class DLModule(torch.nn.Module):
 
     def save_weights(
         self,
-        path: str
+        path_str: str
     ) -> None:
         state_dict = self.state_dict()
-        os.path.dirname(path) and os.makedirs(os.path.dirname(path), exist_ok=True)
-        torch.save(state_dict, path)
+        full_path = os.path.join(path_str, self.model_name, "best_weights.pt")
+        os.path.dirname(full_path) and os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        torch.save(state_dict, full_path)
 
 
     def load_weights(
@@ -225,8 +234,9 @@ class DLModule(torch.nn.Module):
 
         assert self.logdir is not None
         if name not in self._tb_writers:
-            self._tb_writers[name] = torch.utils.tensorboard.SummaryWriter(os.path.join(self.logdir, name))
+            self._tb_writers[name] = torch.utils.tensorboard.SummaryWriter(os.path.join(self.logdir, self.model_name, name, self.args_name))
         return self._tb_writers[name]
+
 
     def _eval_stop_and_weights(self) -> None:
         curr_metric = self.average_loss if self.eval_metric == 'loss' else self.metrics[self.eval_metric].compute()
@@ -235,10 +245,23 @@ class DLModule(torch.nn.Module):
         if improved:
             self.best_metric_val = curr_metric
             self.stagnation = 0
-            if self._save_weights: self.save_weights(os.path.join(self.logdir, "best_weights.pt"))
+            if self._save_weights: self.save_weights(self.logdir)
         else:
             self.stagnation += 1
             self.stop = self.stagnation >= self.early_stop if self.early_stop else False
+
+
+    def _create_log_name(
+        self,
+        args: argparse.Namespace
+    ) -> None:
+        self.logdir = args.logdir
+        self.model_name = self.__class__.__name__
+        self.args_name = "{}-{}".format(
+            datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
+            ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", k), v) for k, v in sorted(vars(args).items())))
+        )
+
 
     @staticmethod
     def _get_auto_device() -> torch.device:
