@@ -19,17 +19,19 @@ class DownscalingTransform:
         sample = self.dataset[index]
         return self.transform(sample)
     
-    def default_transform(self, sample: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
-        return sample['input'], sample['target']
+    @staticmethod
+    def default_transform(sample: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        return sample["input"], sample["target"]
 
-    def default_collate_fn(self, batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor]:
+    @staticmethod
+    def default_collate_fn(batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor]:
         inputs = torch.stack([item[0] for item in batch])
         targets = torch.stack([item[1] for item in batch])
         return inputs, targets
 
     def dataloader(self, batch_size: int, shuffle: bool = False, num_workers: int = 0) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.dataset, 
+            self, 
             batch_size=batch_size, 
             shuffle=shuffle,
             collate_fn=self.collate_fn,
