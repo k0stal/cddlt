@@ -5,7 +5,7 @@ import xarray as xr
 import pandas as pd
 import pandas as pd
 
-from typing import List, Tuple, Callable, Set
+from typing import List, Tuple, Callable, TypedDict
 from pathlib import Path
 
 class NetCDFDataset(torch.utils.data.Dataset):

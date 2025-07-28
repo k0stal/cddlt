@@ -68,7 +68,11 @@ class ReKIS:
 
         def __getitem__(self, index: int) -> "ReKIS.Element":
             input, target = super().__getitem__(index)
-            return input, target
+            element: ReKIS.Element = {
+                "input": input,
+                "target": target
+            }
+            return element
 
         def __len__(self) -> int:
             return super().__len__()

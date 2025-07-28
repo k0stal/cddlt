@@ -40,7 +40,11 @@ class CORDEX:
 
         def __getitem__(self, index: int) -> "CORDEX.Element":
             input, target = super().__getitem__(index)
-            return input, target
+            element: CORDEX.Element = {
+                "input": input,
+                "target": target
+            }
+            return element
 
         def __len__(self) -> int:
             return super().__len__()
