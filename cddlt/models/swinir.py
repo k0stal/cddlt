@@ -587,6 +587,13 @@ class Upsample(nn.Sequential):
         elif scale == 3:
             m.append(nn.Conv2d(num_feat, 9 * num_feat, 3, 1, 1))
             m.append(nn.PixelShuffle(3))
+        ### --- modif to support 10x upsacle ---
+        elif scale == 10:
+            m.append(nn.Conv2d(num_feat, 4 * num_feat, 3, 1, 1))
+            m.append(nn.PixelShuffle(2))
+            m.append(nn.Conv2d(num_feat, 25 * num_feat, 3, 1, 1))
+            m.append(nn.PixelShuffle(5))
+        ### ---
         else:
             raise ValueError(f'scale {scale} is not supported. ' 'Supported scales: 2^n and 3.')
         super(Upsample, self).__init__(*m)
@@ -606,6 +613,8 @@ class UpsampleOneStep(nn.Sequential):
         self.num_feat = num_feat
         self.input_resolution = input_resolution
         m = []
+
+        ### should also support 10x upscale ---
         m.append(nn.Conv2d(num_feat, (scale ** 2) * num_out_ch, 3, 1, 1))
         m.append(nn.PixelShuffle(scale))
         super(UpsampleOneStep, self).__init__(*m)
@@ -755,6 +764,10 @@ class SwinIR(cddlt.DLModule):
             self.conv_up1 = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
             if self.upscale == 4:
                 self.conv_up2 = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
+            ### --- modif to support 10x upscale ---
+            if self.upscale == 10:
+                self.conv_up2 = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
+            ### ---
             self.conv_hr = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
             self.conv_last = nn.Conv2d(num_feat, num_out_ch, 3, 1, 1)
             self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
@@ -829,6 +842,10 @@ class SwinIR(cddlt.DLModule):
             x = self.lrelu(self.conv_up1(torch.nn.functional.interpolate(x, scale_factor=2, mode='nearest')))
             if self.upscale == 4:
                 x = self.lrelu(self.conv_up2(torch.nn.functional.interpolate(x, scale_factor=2, mode='nearest')))
+            # --- modif to support 10x upscale ---
+            elif self.upscale == 10:
+                x = self.lrelu(self.conv_up2(torch.nn.functional.interpolate(x, scale_factor=5), mode='nearset'))
+            # ---
             x = self.conv_last(self.lrelu(self.conv_hr(x)))
         else:
             # for image denoising and JPEG compression artifact reduction
