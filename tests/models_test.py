@@ -4,6 +4,8 @@ import torchmetrics
 import argparse
 import cddlt
 
+from typing import Dict, Tuple, List
+
 from cddlt.datasets.rekis_dataset import ReKIS
 from cddlt.datasets.cordex_dataset import CORDEX
 from cddlt.dataloaders.downscaling_transform import DownscalingTransform
@@ -12,7 +14,10 @@ from cddlt.models.bicubic import Bicubic
 from cddlt.models.srcnn import SRCNN
 from cddlt.models.espcn import ESPCN
 from cddlt.models.fno import FNO
-# from cddlt.models.swinir import SwinIR
+from cddlt.models.edsr import EDSR
+from cddlt.models.deepesdtas import DeepESDtas
+from cddlt.models.deepesdpr import DeepESDpr
+from cddlt.models.swinir import SwinIR
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", default=4, type=int)
@@ -24,10 +29,12 @@ parser.add_argument("--lr", default=0.001, type=float)
 parser.add_argument("--logdir", default="logs", type=str)
 parser.add_argument("--variables", default=["TM"], type=list)
 
-DATA_PATH = "..."
+DATA_PATH = "/Users/petr/Documents/projects/cddlt/data"
 
 def main(args: argparse.Namespace) -> None:
     cddlt.startup(args)
+
+    ### Rekis
 
     rekis = ReKIS(
         data_path=f"{DATA_PATH}/rekis",
@@ -40,6 +47,8 @@ def main(args: argparse.Namespace) -> None:
 
     rekis_train = DownscalingTransform(dataset=rekis.train).dataloader(args.batch_size, shuffle=True)
     rekis_dev = DownscalingTransform(dataset=rekis.dev).dataloader(args.batch_size)
+
+    ### Cordex
 
     cordex = CORDEX(
         data_path=f"{DATA_PATH}/cordex",
@@ -67,7 +76,7 @@ def main(args: argparse.Namespace) -> None:
 
     bicubic.evaluate(rekis_dev, print_loss=True, epochs=args.epochs)
 
-    # ### SRCNN
+    ### SRCNN
 
     srcnn = SRCNN(
         n_channels=1,
@@ -131,36 +140,131 @@ def main(args: argparse.Namespace) -> None:
     fno.load_weights(os.path.join(args.logdir, fno.model_name))
     fno.evaluate(rekis_dev, print_loss=True)
 
-    ### cordex eval
+    ### EDSR
 
-    dev_predict = fno.predict(cordex_dev)
-    test_predict = fno.predict(cordex_test)
+    edsr = EDSR(
+        channels=1,
+        scale_factor=10
+    )
 
-    print(f"cordex dev predict shape: {dev_predict[0].shape}")
-    print(f"cordex test predict shape: {test_predict[0].shape}")
+    edsr.configure(
+        optimizer=torch.optim.Adam(edsr.parameters(), lr=1e-4),
+        scheduler=None,
+        loss=torch.nn.L1Loss(),
+        args = args,
+        device = "cpu"
+    )
+
+    print(f"--- EDSR ---")
+
+    edsr.fit(rekis_train, rekis_dev, args.epochs)
+
+    edsr.load_weights(os.path.join(args.logdir, edsr.model_name))
+    edsr.evaluate(rekis_dev, print_loss=True)
+
+    ### DeepESDtas
+
+    def sample_transform(sample: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor]:
+        input, target = sample["input"], sample["target"]
+        B, H, W = target.shape
+        target = target.view(B, H * W).squeeze(1)
+        return input, target
+    
+    def collate_fn(batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor]:
+        inputs = torch.stack([item[0] for item in batch])
+        targets = torch.stack([item[1] for item in batch]).squeeze(1)
+        return inputs, targets.squeeze(1)
+        
+    rekis_deepesd_train = DownscalingTransform(
+        dataset=rekis.train, 
+        transform=sample_transform,
+        collate_fn=collate_fn
+    ).dataloader(args.batch_size, shuffle=True)
+
+    rekis_deepesd_dev = DownscalingTransform(
+        dataset=rekis.dev, 
+        transform=sample_transform,
+        collate_fn=collate_fn
+    ).dataloader(args.batch_size)
+
+    deepesdtas = DeepESDtas(
+        x_shape = (..., 1, 40, 40),
+        y_shape = (..., 160000),
+        filters_last_conv = 2,
+        stochastic = False
+    )
+
+    deepesdtas.configure(
+        optimizer = torch.optim.Adam(params=deepesdtas.parameters(), lr=args.lr),
+        scheduler = None,
+        loss = torchmetrics.MeanSquaredError(squared=False),
+        args = args,
+        device="cpu"
+    )
+
+    print(f"--- DeepESDtas ---")
+
+    deepesdtas.fit(rekis_deepesd_train, rekis_deepesd_dev, args.epochs)
+
+    deepesdtas.load_weights(os.path.join(args.logdir, deepesdtas.model_name))
+    deepesdtas.evaluate(rekis_deepesd_dev, print_loss=True)
+
+    ### DeepESDpr
+
+    deepesdpr = DeepESDpr(
+        x_shape = (..., 1, 40, 40),
+        y_shape = (..., 160000),
+        filters_last_conv = 2,
+        stochastic = False
+    )
+
+    deepesdpr.configure(
+        optimizer = torch.optim.Adam(params=deepesdpr.parameters(), lr=args.lr),
+        scheduler = None,
+        loss = torchmetrics.MeanSquaredError(squared=False),
+        args = args,
+        device="cpu"
+    )
+
+    print(f"--- DeepESDpr ---")
+
+    deepesdpr.fit(rekis_deepesd_train, rekis_deepesd_dev, args.epochs)
+
+    deepesdpr.load_weights(os.path.join(args.logdir, deepesdpr.model_name))
+    deepesdpr.evaluate(rekis_deepesd_dev, print_loss=True)
 
     ### SwinIR
 
-    # swin = SwinIR(
-    #     img_size=40,
-    #     in_chans=1,
-    #     upscale=10 ## fix, implementaiton supports only 3 / 2^n upsacling factors
-    # )
+    swin = SwinIR(
+        img_size=40,
+        in_chans=1,
+        window_size=4,
+        upsampler="pixelshuffle",
+        upscale=10
+    )
 
-    # swin.configure(
-    #     optimizer = torch.optim.Adam(params=fno.parameters(), lr=args.lr),
-    #     scheduler = None,
-    #     loss = torchmetrics.MeanSquaredError(squared=False),
-    #     logdir = args.logdir,
-    #     device="cpu"
-    # )
+    swin.configure(
+        optimizer = torch.optim.Adam(params=swin.parameters(), lr=args.lr),
+        scheduler = None,
+        loss = torch.nn.L1Loss(),
+        args = args,
+        device="cpu"
+    )
 
-    # print(f"--- SWIN ---")
+    print(f"--- SWIN ---")
 
-    # swin.fit(rekis_train, rekis_dev, args.epochs)
+    swin.fit(rekis_train, rekis_dev, args.epochs)
 
-    # swin.load_weights(args.logdir)
-    # swin.evaluate(rekis_dev, log_loss=True)
+    swin.load_weights(os.path.join(args.logdir, swin.model_name))
+    swin.evaluate(rekis_dev, print_loss=True)
+
+    ### cordex eval
+
+    dev_predict = swin.predict(cordex_dev)
+    test_predict = swin.predict(cordex_test)
+
+    print(f"cordex dev predict shape: {dev_predict[0].shape}")
+    print(f"cordex test predict shape: {test_predict[0].shape}")
 
 
 if __name__ == "__main__":
