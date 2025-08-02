@@ -42,6 +42,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
         start_date, end_date = interval
         self.start_date, self.end_date = self._cnv_date(start_date), self._cnv_date(end_date)
         self.variables = variables
+        self.chunks = chunks or {'time': 50}
         
         self.nc_files = self._get_nc_files()
         assert len(self.nc_files) > 0, f"No NetCDF files found in {data_path}"
