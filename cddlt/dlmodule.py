@@ -76,10 +76,6 @@ class DLModule(torch.nn.Module):
             for x, y in train_pbar:
                 self.train_step(x, y)
 
-            if self.metrics:
-                for name, metric in self.metrics.items():
-                    print(f"train_{name}: {metric.compute():.4f}")
-
             train_loss = self.average_loss
             self._write_tb_log()
             self.evaluate(dev_loader)
@@ -120,8 +116,10 @@ class DLModule(torch.nn.Module):
         for x, y in dataloader:
             self.eval_step(x, y)
 
+        dev_metrics_log = []
         for name, metric in self.metrics.items():
-            print(f"dev_{name}: {metric.compute().item():.4f}")
+            dev_metrics_log.append(f"dev_{name}: {metric.compute().item():.4f}")
+        if self.metrics: print(f"{', '.join(dev_metrics_log)}")
 
         if print_loss: print(f"Evaluation - dev_loss: {self.average_loss:.4}")
         
