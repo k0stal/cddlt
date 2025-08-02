@@ -20,12 +20,12 @@ from cddlt.models.deepesdpr import DeepESDpr
 from cddlt.models.swinir import SwinIR
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--batch_size", default=4, type=int)
-parser.add_argument("--epochs", default=3, type=int)
+parser.add_argument("--batch_size", default=2, type=int)
+parser.add_argument("--epochs", default=5, type=int)
 parser.add_argument("--seed", default=42, type=int)
-parser.add_argument("--threads", default=4, type=int)
+parser.add_argument("--threads", default=0, type=int)
 parser.add_argument("--upscale_factor", default=10, type=int)
-parser.add_argument("--lr", default=0.001, type=float)
+parser.add_argument("--lr", default=1e-4, type=float)
 parser.add_argument("--logdir", default="logs", type=str)
 parser.add_argument("--variables", default=["TM"], type=list)
 
@@ -42,7 +42,8 @@ def main(args: argparse.Namespace) -> None:
         train_len=("2000-01-01", "2000-01-10"),
         dev_len=("2000-01-10", "2000-01-20"),
         test_len=("2000-01-20", "2000-02-01"),
-        resampling="cubic_spline"
+        resampling="cubic_spline",
+        standardize=True
     )
 
     rekis_train = DownscalingTransform(dataset=rekis.train).dataloader(args.batch_size, shuffle=True)
@@ -54,7 +55,8 @@ def main(args: argparse.Namespace) -> None:
         data_path=f"{DATA_PATH}/cordex",
         variables=args.variables,
         dev_len=("2000-01-20", "2000-02-01"),
-        test_len=("2000-02-01", "2000-03-01")
+        test_len=("2000-02-01", "2000-03-01"),
+        standardize=True
     )
 
     cordex_dev = DownscalingTransform(dataset=cordex.dev).dataloader(args.batch_size)
@@ -69,6 +71,11 @@ def main(args: argparse.Namespace) -> None:
     bicubic.configure(
         loss = torchmetrics.MeanSquaredError(squared=False),
         args = args,
+        metrics={
+            "mse": torchmetrics.MeanSquaredError(squared=True),
+            "mae": torchmetrics.MeanAbsoluteError(),
+            "psnr": torchmetrics.image.PeakSignalNoiseRatio(),
+        },
         device = "cpu"
     )
 
@@ -87,6 +94,11 @@ def main(args: argparse.Namespace) -> None:
         optimizer = torch.optim.Adam(params=srcnn.parameters(), lr=args.lr),
         loss = torchmetrics.MeanSquaredError(squared=False),
         args = args,
+        metrics={
+            "mse": torchmetrics.MeanSquaredError(squared=True),
+            "mae": torchmetrics.MeanAbsoluteError(),
+            "psnr": torchmetrics.image.PeakSignalNoiseRatio(),
+        },
         device = "cpu"
     )
 
@@ -104,11 +116,20 @@ def main(args: argparse.Namespace) -> None:
         upscale_factor = args.upscale_factor
     )
 
+    optimizer = torch.optim.Adam(params=espcn.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=args.epochs)
+
     espcn.configure(
-        optimizer = torch.optim.Adam(params=espcn.parameters(), lr=args.lr),
-        scheduler = None,
+        optimizer = optimizer,
+        scheduler = scheduler,
         loss = torchmetrics.MeanSquaredError(squared=False),
-        args = args
+        args = args,
+        metrics={
+            "mse": torchmetrics.MeanSquaredError(squared=True),
+            "mae": torchmetrics.MeanAbsoluteError(),
+            "psnr": torchmetrics.PeakSignalNoiseRatio(),
+        },
+        device = "cpu"
     )
 
     print(f"--- ESPCN ---")
@@ -130,6 +151,11 @@ def main(args: argparse.Namespace) -> None:
         scheduler = None,
         loss = torchmetrics.MeanSquaredError(squared=False),
         args = args,
+        metrics={
+            "mse": torchmetrics.MeanSquaredError(squared=True),
+            "mae": torchmetrics.MeanAbsoluteError(),
+            "psnr": torchmetrics.PeakSignalNoiseRatio(),
+        },
         device="cpu"
     )
 
@@ -238,17 +264,28 @@ def main(args: argparse.Namespace) -> None:
     swin = SwinIR(
         img_size=40,
         in_chans=1,
-        window_size=4,
+        window_size=8,
+        embed_dim=180,
+        depths=[6, 6, 6, 6, 6, 6],
+        num_heads=[6, 6, 6, 6, 6, 6],
         upsampler="pixelshuffle",
         upscale=10
     )
 
+    optimizer = torch.optim.Adam(params=swin.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=args.epochs)
+
     swin.configure(
-        optimizer = torch.optim.Adam(params=swin.parameters(), lr=args.lr),
-        scheduler = None,
-        loss = torch.nn.L1Loss(),
+        optimizer = optimizer,
+        scheduler = scheduler,
+        loss = torchmetrics.MeanSquaredError(squared=False),
         args = args,
-        device="cpu"
+        metrics={
+            "mse": torchmetrics.MeanSquaredError(squared=True),
+            "mae": torchmetrics.MeanAbsoluteError(),
+            "psnr": torchmetrics.PeakSignalNoiseRatio(),
+        },
+        device = "cpu"
     )
 
     print(f"--- SWIN ---")
