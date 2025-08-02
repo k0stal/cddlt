@@ -5,11 +5,14 @@ import xarray as xr
 import pandas as pd
 import pandas as pd
 
-from typing import List, Tuple, Callable, TypedDict
+from typing import List, Tuple, Callable, Dict
 from pathlib import Path
 
 class NetCDFDataset(torch.utils.data.Dataset):
+
     SUFFIXES: List[str] = [".nc", ".nc4"]
+
+    TEMP_VARS: List[str] = ["TM", "TN", "TX"]
 
     @staticmethod
     def _cnv_date(date: str) -> pd.Timestamp:
@@ -39,7 +42,6 @@ class NetCDFDataset(torch.utils.data.Dataset):
         start_date, end_date = interval
         self.start_date, self.end_date = self._cnv_date(start_date), self._cnv_date(end_date)
         self.variables = variables
-        self.chunks = chunks or {'time': 50}
         
         self.nc_files = self._get_nc_files()
         assert len(self.nc_files) > 0, f"No NetCDF files found in {data_path}"
@@ -47,7 +49,39 @@ class NetCDFDataset(torch.utils.data.Dataset):
 
         self.inputs = self.dataset
         self.targets = self.dataset
-  
+
+    def fit_transform_std(self) -> Dict[str, Dict[str, float]]:
+        params = {}
+
+        for var_name in sorted(self.dataset.data_vars):
+            mean = self.dataset[var_name].mean().values
+            std = self.dataset[var_name].std().values
+            params[var_name] = {"mean": mean, "std": std}
+
+            std_variable = (self.dataset[var_name] - mean) / std
+            std_variable.rio.write_crs(self.dataset[var_name].rio.crs, inplace=True)
+            self.dataset[var_name] = std_variable
+
+        self.inputs = self.dataset
+        self.outputs = self.dataset
+
+        return params
+
+    def transform_std(self, params: Dict[str, Dict[str, float]]) -> None:
+        assert len(self.dataset.data_vars) == len(params), \
+            f"Dictionary should contain {len(self.dataset.data_vars)} variables."
+
+        for var_name in sorted(self.dataset.data_vars):
+            mean = params[var_name]["mean"]
+            std = params[var_name]["std"]
+
+            std_variable = (self.dataset[var_name] - mean) / std
+            std_variable.rio.write_crs(self.dataset[var_name].rio.crs, inplace=True)
+            self.dataset[var_name] = std_variable
+
+        self.inputs = self.dataset
+        self.outputs = self.dataset
+    
     def reproject(
         self,
         reproject_fn: Callable[[xr.DataArray], xr.DataArray],
@@ -56,11 +90,18 @@ class NetCDFDataset(torch.utils.data.Dataset):
         self.inputs = reproject_fn(self.dataset)
         self.targets = self.dataset
 
+    def convert_kelvin_to_celsius(self) -> None:
+        for variable in self.variables:
+            if variable not in self.TEMP_VARS: continue
+            conv_var = self.dataset[variable] - 273.15
+            conv_var.rio.write_crs(self.dataset[variable].rio.crs, inplace=True)
+            self.dataset[variable] = conv_var
+
     def convert_to_tensors(self) -> None:
         for attr_name in ['inputs', 'targets']:
             attr = getattr(self, attr_name)
             variables = []
-            for var_name in attr.data_vars:
+            for var_name in sorted(attr.data_vars):
                 tensor = torch.from_numpy(attr[var_name].values).unsqueeze(1)
                 variables.append(tensor)
 

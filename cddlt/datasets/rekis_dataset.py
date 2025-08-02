@@ -85,11 +85,13 @@ class ReKIS:
         train_len: Tuple[str, str],
         dev_len: Tuple[str, str],
         test_len: Tuple[str, str],
-        resampling: str = "cubic_spline"    
+        resampling: str = "cubic_spline",
+        standardize: bool = True    
     ) -> None:
         
         assert all(var in self.AVAILABLE_VARIABLES for var in variables), f"Selected variables are not supported, select from: {self.AVAILABLE_VARIABLES}"
         self.variables = variables
+        self.standard_params = {}
 
         intervals = [train_len, dev_len, test_len]
         for start, end in intervals:
@@ -99,13 +101,35 @@ class ReKIS:
                 f"End date {end} must be <= {self.RANGE_AVAILABLE[1]}"
 
         for dataset, interval in zip(self.SETS_NAMES, intervals):
-            #dataset_path = Path(data_path) / self.DATASET_NAME
             dataset_obj = self.Dataset(data_path, interval, self.variables)
+            if standardize:
+                if dataset == "train":
+                    self.standard_params = dataset_obj.fit_transform_std()
+                else:
+                    dataset_obj.transform_std(self.standard_params)
             dataset_obj.reproject(self.REPROJECT_FN(resampling))
             dataset_obj.convert_to_tensors()
             setattr(self, dataset, dataset_obj)
 
         print(f"\nReKIS dataset initalized.\ntrain size: ({len(self.train)})\ndev size: ({len(self.dev)})\ntest size: ({len(self.test)})\n")
+
+    def destandardize(self, input: List[torch.Tensor]) -> List[torch.Tensor]:
+        _, C, _, _ = input[0].shape
+        assert C == len(self.variables), f"Expected {len(self.variables)} variables, got {C}."
+
+        output = []
+        for tensor in input:
+            destandardized_channels = []
+            for idx, variable in enumerate(self.variables):
+                std = torch.tensor(self.standard_params[variable]["std"], dtype=tensor.dtype, device=tensor.device)
+                mean = torch.tensor(self.standard_params[variable]["mean"], dtype=tensor.dtype, device=tensor.device)
+                channel = tensor[:, idx, :, :] * std + mean
+                destandardized_channels.append(channel.unsqueeze(1))
+
+            destandardized_tensor = torch.cat(destandardized_channels, dim=1)
+            output.append(destandardized_tensor)
+
+        return output
 
     """Train dataset."""
     train: Dataset
