@@ -11,6 +11,8 @@ from cddlt.datasets.cordex_dataset import CORDEX
 from cddlt.dataloaders.downscaling_transform import DownscalingTransform
 
 from cddlt.models.bicubic import Bicubic
+from cddlt.models.unet import UNet
+from cddlt.models.unetplusplus import UNetPlusPlus
 from cddlt.models.srcnn import SRCNN
 from cddlt.models.espcn import ESPCN
 from cddlt.models.fno import FNO
@@ -82,6 +84,62 @@ def main(args: argparse.Namespace) -> None:
     print(f"--- Bicubic ---")
 
     bicubic.evaluate(rekis_dev, print_loss=True, epochs=args.epochs)
+
+    ### Unet
+
+    unet = UNet (
+        layers=4,
+        conv_kernels=32,
+        upscale_factor=10
+    )
+
+    unet.configure(
+        optimizer = torch.optim.Adam(params=unet.parameters(), lr=args.lr),
+        loss = torch.nn.MSELoss(),
+        args = args,
+        metrics={
+            "mse": torchmetrics.MeanSquaredError(squared=True),
+            "rmse": torchmetrics.MeanSquaredError(squared=False),
+            "mae": torchmetrics.MeanAbsoluteError(),
+            "psnr": torchmetrics.image.PeakSignalNoiseRatio(),
+        },
+        device = "cpu"
+    )
+
+    print(f"--- UNET ---")
+
+    unet.fit(rekis_train, rekis_dev, args.epochs)
+
+    unet.load_weights(os.path.join(args.logdir, unet.model_name))
+    unet.evaluate(rekis_dev, print_loss=True)
+
+    ### Unet++
+
+    unetplusplus = UNetPlusPlus(
+        layers=4,
+        conv_kernels=32,
+        upscale_factor=10
+    )
+
+    unetplusplus.configure(
+        optimizer = torch.optim.Adam(params=unetplusplus.parameters(), lr=args.lr),
+        loss = torch.nn.MSELoss(),
+        args = args,
+        metrics={
+            "mse": torchmetrics.MeanSquaredError(squared=True),
+            "rmse": torchmetrics.MeanSquaredError(squared=False),
+            "mae": torchmetrics.MeanAbsoluteError(),
+            "psnr": torchmetrics.image.PeakSignalNoiseRatio(),
+        },
+        device = "cpu"
+    )
+
+    print(f"--- UNET++ ---")
+
+    unetplusplus.fit(rekis_train, rekis_dev, args.epochs)
+
+    unetplusplus.load_weights(os.path.join(args.logdir, unetplusplus.model_name))
+    unetplusplus.evaluate(rekis_dev, print_loss=True)
 
     ### SRCNN
 
