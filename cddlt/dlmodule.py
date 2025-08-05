@@ -30,12 +30,16 @@ class DLModule(torch.nn.Module):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.loss = loss
-        self.metrics = metrics if metrics is not None else {}
         self.device = self._get_auto_device() if device == "auto" else torch.device(device)
+        self.metrics = metrics if metrics is not None else {}
         self._create_log_name(args)
         self.epoch = 0
         self._tb_writers = {}
         self.to(self.device)
+
+        # move merics to device
+        for value in metrics.values():
+            value.to(self.device)
 
         return self
 
