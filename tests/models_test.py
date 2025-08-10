@@ -23,7 +23,7 @@ from cddlt.models.swinir import SwinIR
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", default=2, type=int)
-parser.add_argument("--epochs", default=5, type=int)
+parser.add_argument("--epochs", default=2, type=int)
 parser.add_argument("--seed", default=42, type=int)
 parser.add_argument("--threads", default=0, type=int)
 parser.add_argument("--upscale_factor", default=10, type=int)
@@ -58,7 +58,8 @@ def main(args: argparse.Namespace) -> None:
         variables=args.variables,
         dev_len=("2000-01-20", "2000-02-01"),
         test_len=("2000-02-01", "2000-03-01"),
-        standardize=True
+        standardize=True,
+        standard_params=rekis.standard_params
     )
 
     cordex_dev = DownscalingTransform(dataset=cordex.dev).dataloader(args.batch_size)
@@ -85,62 +86,6 @@ def main(args: argparse.Namespace) -> None:
 
     bicubic.evaluate(rekis_dev, print_loss=True, epochs=args.epochs)
 
-    ### Unet
-
-    unet = UNet (
-        layers=4,
-        conv_kernels=32,
-        upscale_factor=10
-    )
-
-    unet.configure(
-        optimizer = torch.optim.Adam(params=unet.parameters(), lr=args.lr),
-        loss = torch.nn.MSELoss(),
-        args = args,
-        metrics={
-            "mse": torchmetrics.MeanSquaredError(squared=True),
-            "rmse": torchmetrics.MeanSquaredError(squared=False),
-            "mae": torchmetrics.MeanAbsoluteError(),
-            "psnr": torchmetrics.image.PeakSignalNoiseRatio(),
-        },
-        device = "cpu"
-    )
-
-    print(f"--- UNET ---")
-
-    unet.fit(rekis_train, rekis_dev, args.epochs)
-
-    unet.load_weights(os.path.join(args.logdir, unet.model_name))
-    unet.evaluate(rekis_dev, print_loss=True)
-
-    ### Unet++
-
-    unetplusplus = UNetPlusPlus(
-        layers=4,
-        conv_kernels=32,
-        upscale_factor=10
-    )
-
-    unetplusplus.configure(
-        optimizer = torch.optim.Adam(params=unetplusplus.parameters(), lr=args.lr),
-        loss = torch.nn.MSELoss(),
-        args = args,
-        metrics={
-            "mse": torchmetrics.MeanSquaredError(squared=True),
-            "rmse": torchmetrics.MeanSquaredError(squared=False),
-            "mae": torchmetrics.MeanAbsoluteError(),
-            "psnr": torchmetrics.image.PeakSignalNoiseRatio(),
-        },
-        device = "cpu"
-    )
-
-    print(f"--- UNET++ ---")
-
-    unetplusplus.fit(rekis_train, rekis_dev, args.epochs)
-
-    unetplusplus.load_weights(os.path.join(args.logdir, unetplusplus.model_name))
-    unetplusplus.evaluate(rekis_dev, print_loss=True)
-
     ### SRCNN
 
     srcnn = SRCNN(
@@ -166,6 +111,12 @@ def main(args: argparse.Namespace) -> None:
 
     srcnn.load_weights(os.path.join(args.logdir, srcnn.model_name))
     srcnn.evaluate(rekis_dev, print_loss=True)
+
+    dev_predict = srcnn.predict(cordex_dev)
+    test_predict = srcnn.predict(cordex_test)
+
+    print(f"cordex dev predict shape: {dev_predict[0].shape}")
+    print(f"cordex test predict shape: {test_predict[0].shape}")
 
     ### ESPCN
 
