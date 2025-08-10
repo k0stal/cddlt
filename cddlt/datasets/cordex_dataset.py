@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 
-from typing import TypedDict, Set, Tuple, List
+from typing import TypedDict, Set, Tuple, List, Dict
 from cddlt.datasets.netcdf_dataset import NetCDFDataset
 
 class CORDEX:
@@ -56,13 +56,18 @@ class CORDEX:
         variables: List[str],
         dev_len: Tuple[str, str],
         test_len: Tuple[str, str],
-        standardize: bool = True
-        #resampling: str = "cubic_spline"   # data already prepared
+        standardize: bool = True,
+        standard_params: Dict[str, Dict[str, float]] = {}   # we will use the fitted params from rekis
+        #resampling: str = "cubic_spline"                   # data already prepared
     ) -> None:
         
         assert all(var in self.AVAILABLE_VARIABLES for var in variables), f"Selected variables are not supported, select from: {self.AVAILABLE_VARIABLES}"
+        if standardize:
+            assert standard_params != {}, f"Standardization without specified params."
+
         self.variables = variables
-        self.standard_params = {}
+        self.standardize = standardize
+        self.standard_params = standard_params
 
         intervals = [dev_len, test_len]
         for start, end in intervals:
@@ -73,12 +78,8 @@ class CORDEX:
 
         for dataset, interval in zip(self.SETS_NAMES, intervals):
             dataset_obj = self.Dataset(data_path, interval, self.variables)
-            dataset_obj.convert_kelvin_to_celsius()
-            if standardize:
-                if dataset == "dev": ### TODO, fix!
-                    self.standard_params = dataset_obj.fit_transform_std()
-                else:
-                    dataset_obj.transform_std(self.standard_params)
+            if self.standardize:
+                dataset_obj.transform_std(self.standard_params)
             dataset_obj.convert_to_tensors()
             setattr(self, dataset, dataset_obj)
 
