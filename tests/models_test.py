@@ -11,8 +11,6 @@ from cddlt.datasets.cordex_dataset import CORDEX
 from cddlt.dataloaders.downscaling_transform import DownscalingTransform
 
 from cddlt.models.bicubic import Bicubic
-from cddlt.models.unet import UNet
-from cddlt.models.unetplusplus import UNetPlusPlus
 from cddlt.models.srcnn import SRCNN
 from cddlt.models.espcn import ESPCN
 from cddlt.models.fno import FNO
@@ -68,7 +66,8 @@ def main(args: argparse.Namespace) -> None:
     ### Bicubic
 
     bicubic = Bicubic(
-        upscale_factor=args.upscale_factor
+        upscale_factor=args.upscale_factor,
+        mode = "bilinear"
     )
 
     bicubic.configure(
