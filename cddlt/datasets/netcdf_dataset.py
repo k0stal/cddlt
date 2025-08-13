@@ -42,7 +42,6 @@ class NetCDFDataset(torch.utils.data.Dataset):
         start_date, end_date = interval
         self.start_date, self.end_date = self._cnv_date(start_date), self._cnv_date(end_date)
         self.variables = variables
-        self.chunks = chunks or {'time': 50}
         
         self.nc_files = self._get_nc_files()
         assert len(self.nc_files) > 0, f"No NetCDF files found in {data_path}"
@@ -122,7 +121,6 @@ class NetCDFDataset(torch.utils.data.Dataset):
         dataset = xr.open_mfdataset(
             self.nc_files,
             decode_coords="all",
-            chunks=self.chunks,
             parallel=True
         )
         
@@ -141,7 +139,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
         self.dataset = filtered_ds
         self.time_coords = filtered_ds.time.values
         
-        print(f"Loaded data shape: {dict(filtered_ds.dims)}")
+        print(f"Loaded data shape: {dict(filtered_ds.sizes)}")
         print(f"Time range: {pd.to_datetime(self.time_coords[0])} to {pd.to_datetime(self.time_coords[-1])}")
     
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
