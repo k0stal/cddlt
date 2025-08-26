@@ -1,3 +1,24 @@
+"""
+General module for training machine learning models.
+
+This module provides a unified interface for training PyTorch deep learning models
+with built-in support for metrics tracking, tensorboard logging, early stopping,
+and model checkpointing.
+
+Before training, DLModule has to be configured using the .configure() method.
+Configuration requires: loss function, optimizer, scheduler (optional),
+metrics (optional), arguments, and device (optional).
+
+For training, the .fit() method has to be called with train and validation DataLoaders
+and the number of epochs.
+
+For evaluation, the .evaluate() method can be used with a DataLoader to assess
+model performance on a dataset.
+
+For inference, the .predict() method generates predictions on new data using
+a DataLoader.
+"""
+
 import os
 import re
 import time
