@@ -3,7 +3,6 @@ import os
 import rasterio
 import xarray as xr
 import pandas as pd
-import pandas as pd
 
 from typing import List, Tuple, Callable, Dict
 from pathlib import Path
@@ -33,8 +32,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
         data_path: str, 
         interval: Tuple[str, str], 
         variables: List[str], 
-        chunks: dict = None
-    ):
+    ) -> None:
         super().__init__()
         assert os.path.isdir(data_path), f"{data_path} is not a valid directory."
         
@@ -63,7 +61,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
             self.dataset[var_name] = std_variable
 
         self.inputs = self.dataset
-        self.outputs = self.dataset
+        self.targets = self.dataset
 
         return params
 
@@ -80,7 +78,7 @@ class NetCDFDataset(torch.utils.data.Dataset):
             self.dataset[var_name] = std_variable
 
         self.inputs = self.dataset
-        self.outputs = self.dataset
+        self.targets = self.dataset
     
     def reproject(
         self,
