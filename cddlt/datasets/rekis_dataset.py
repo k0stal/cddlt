@@ -6,6 +6,7 @@ import pandas as pd
 from typing import TypedDict, Set, Tuple, List, Callable
 from pathlib import Path
 from cddlt.datasets.netcdf_dataset import NetCDFDataset
+from cddlt.datasets.netcdf_residual_dataset import NetCDFResidualDataset
 
 """
 TODO:
@@ -31,18 +32,30 @@ class ReKIS:
 
     """Transformation function."""    
     @staticmethod
-    def REPROJECT_FN(method: str) -> Callable[[xr.DataArray], xr.DataArray]:
+    def REPROJECT_FN(method: str, residual: bool) -> Callable[[xr.DataArray], xr.DataArray]:
         try:
             res_method = getattr(rasterio.enums.Resampling, method)
         except AttributeError:
             raise ValueError(f"{method} is not a valid resampling method.")
         
         def reproject_fn(data: xr.DataArray) -> xr.DataArray: ### possibility of paralelization: num_threads arg
-            return data.rio.reproject(
+            
+            ### reproject to match 
+            repro_data = data.rio.reproject(
                 data.rio.crs,
                 resolution=(10_000, 10_000),
                 resampling=res_method
             )
+            
+            ### iterpolate the input to match target resolution
+            if residual: 
+                repro_data = repro_data.rio.reproject(
+                    repro_data.rio.crs,
+                    resolution=(100_000, 100_000), ## original data resolution
+                    resampling=res_method
+                )
+            return repro_data
+        
         return reproject_fn
     
     @staticmethod
@@ -56,6 +69,12 @@ class ReKIS:
     class Element(TypedDict):
         input: torch.Tensor
         target: torch.Tensor
+
+    class ResidualElement(TypedDict):
+        input: torch.Tensor
+        taget: torch.Tensor
+        coarse: torch.Tensor
+        fine: torch.Tensor
 
     class Dataset(NetCDFDataset):
         def __init__(
@@ -76,6 +95,28 @@ class ReKIS:
 
         def __len__(self) -> int:
             return super().__len__()
+        
+    class ResidualDataset(NetCDFResidualDataset):
+        def __init__(
+            self, 
+            data_path: str, 
+            interval: Tuple[str, str], 
+            variables: List[str],
+        ) -> None:
+            super().__init__(data_path, interval, variables)
+
+        def __getitem__(self, index: int) -> "ReKIS.ResidualElement":
+            input, target, coarse, fine = super().__getitem__(index)
+            element: ReKIS.Element = {
+                "input": input,
+                "target": target,
+                "coarse": coarse,
+                "fine": fine
+            }
+            return element
+
+        def __len__() -> int:
+            return super().__len__()
 
     def __init__(
         self, 
@@ -86,6 +127,7 @@ class ReKIS:
         dev_len: Tuple[str, str],
         test_len: Tuple[str, str],
         resampling: str = "cubic_spline",
+        residual: bool = False,
         standardize: bool = True    
     ) -> None:
         
@@ -101,13 +143,13 @@ class ReKIS:
                 f"End date {end} must be <= {self.RANGE_AVAILABLE[1]}"
 
         for dataset, interval in zip(self.SETS_NAMES, intervals):
-            dataset_obj = self.Dataset(data_path, interval, self.variables)
+            dataset_obj = self.Dataset(data_path, interval, self.variables) if not residual else self.ResidualDataset(data_path, interval, self.variables)
             if standardize:
                 if dataset == "train":
                     self.standard_params = dataset_obj.fit_transform_std()
                 else:
                     dataset_obj.transform_std(self.standard_params)
-            dataset_obj.reproject(self.REPROJECT_FN(resampling))
+            dataset_obj.reproject(self.REPROJECT_FN(resampling, residual)) ### the order of std and reproject should be reversed to work with ResidualDataset
             dataset_obj.convert_to_tensors()
             setattr(self, dataset, dataset_obj)
 

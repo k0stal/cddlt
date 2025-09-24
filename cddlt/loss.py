@@ -5,12 +5,6 @@ Implementation of losses for determinstic predictions.
 All are inherited from general `torch.nn.Module`.
 """
 
-"""
-    #TODO
-    - implement ASYMmloss
-    - test all implementations
-"""
-
 class NNLGammaLoss(torch.nn.Module):
     def __init__(self) -> None:
         super(NNLGammaLoss, self).__init__()
