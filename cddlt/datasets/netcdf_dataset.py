@@ -80,7 +80,6 @@ class NetCDFDataset(torch.utils.data.Dataset):
         self,
         reproject_fn: Callable[[xr.DataArray], xr.DataArray],
     ) -> None:
-        self.dataset.rio.set_spatial_dims("easting", "northing")
         self.inputs = reproject_fn(self.dataset)
         self.targets = self.dataset
 
