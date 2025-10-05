@@ -57,7 +57,6 @@ class NetCDFDataset(torch.utils.data.Dataset):
             params[var_name] = {"mean": mean, "std": std}
 
             std_variable = (self.dataset[var_name] - mean) / std
-            std_variable.rio.write_crs(self.dataset[var_name].rio.crs, inplace=True)
             self.dataset[var_name] = std_variable
 
         self.inputs = self.dataset
@@ -70,11 +69,8 @@ class NetCDFDataset(torch.utils.data.Dataset):
             f"Dictionary should contain {len(self.dataset.data_vars)} variables."
 
         for var_name in sorted(self.dataset.data_vars):
-            mean = params[var_name]["mean"]
-            std = params[var_name]["std"]
-
+            mean, std = params[var_name]["mean"], params[var_name]["std"]
             std_variable = (self.dataset[var_name] - mean) / std
-            std_variable.rio.write_crs(self.dataset[var_name].rio.crs, inplace=True)
             self.dataset[var_name] = std_variable
 
         self.inputs = self.dataset

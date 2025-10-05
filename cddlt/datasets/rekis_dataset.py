@@ -3,15 +3,10 @@ import rasterio
 import xarray as xr
 import pandas as pd
 
-from typing import TypedDict, Set, Tuple, List, Callable
+from typing import TypedDict, Set, Tuple, List, Callable, Union
 from pathlib import Path
 from cddlt.datasets.netcdf_dataset import NetCDFDataset
 from cddlt.datasets.netcdf_residual_dataset import NetCDFResidualDataset
-
-"""
-TODO:
-use exact dates from datetime instead of years.
-"""
 
 class ReKIS:
 
@@ -39,21 +34,19 @@ class ReKIS:
             raise ValueError(f"{method} is not a valid resampling method.")
         
         def reproject_fn(data: xr.DataArray) -> xr.DataArray: ### possibility of paralelization: num_threads arg
-            
-            ### reproject to match 
+            data.rio.set_spatial_dims("easting", "northing")  
+            # reproject to lower resolution
             repro_data = data.rio.reproject(
                 data.rio.crs,
                 resolution=(10_000, 10_000),
                 resampling=res_method
             )
             
-            ### iterpolate the input to match target resolution
             if residual: 
-                repro_data = repro_data.rio.reproject(
-                    repro_data.rio.crs,
-                    resolution=(100_000, 100_000), ## original data resolution
-                    resampling=res_method
-                )
+                # reproject to original (high) resolution
+                repro_data = repro_data.rio.reproject_match(data, resampling=res_method)
+
+            repro_data = repro_data.rename({"x": "easting", "y": "northing"})
             return repro_data
         
         return reproject_fn
@@ -76,47 +69,27 @@ class ReKIS:
         coarse: torch.Tensor
         fine: torch.Tensor
 
-    class Dataset(NetCDFDataset):
-        def __init__(
-            self, 
-            data_path: str, 
-            interval: Tuple[str, str], 
-            variables: List[str],
-        ) -> None:
-            super().__init__(data_path, interval, variables)
+    class BaseDataset(NetCDFDataset):
+        """Abstract dataset wrapper for ReKIS"""
 
-        def __getitem__(self, index: int) -> "ReKIS.Element":
-            input, target = super().__getitem__(index)
-            element: ReKIS.Element = {
-                "input": input,
-                "target": target
-            }
-            return element
+        def __init__(self, data_path: str, interval: Tuple[str, str], variables: List[str]):
+            super().__init__(data_path, interval, variables)
 
         def __len__(self) -> int:
             return super().__len__()
-        
-    class ResidualDataset(NetCDFResidualDataset):
-        def __init__(
-            self, 
-            data_path: str, 
-            interval: Tuple[str, str], 
-            variables: List[str],
-        ) -> None:
-            super().__init__(data_path, interval, variables)
 
+    class Dataset(BaseDataset):
+        """Regular dataset"""
+        def __getitem__(self, index: int) -> "ReKIS.Element":
+            input, target = super().__getitem__(index)
+            return {"input": input, "target": target}
+
+    class ResidualDataset(BaseDataset, NetCDFResidualDataset):
+        """Residual dataset"""
         def __getitem__(self, index: int) -> "ReKIS.ResidualElement":
             input, target, coarse, fine = super().__getitem__(index)
-            element: ReKIS.Element = {
-                "input": input,
-                "target": target,
-                "coarse": coarse,
-                "fine": fine
-            }
-            return element
+            return {"input": input, "target": target, "coarse": coarse, "fine": fine}
 
-        def __len__() -> int:
-            return super().__len__()
 
     def __init__(
         self, 
@@ -142,18 +115,24 @@ class ReKIS:
             assert self._cmp_time_str(self.RANGE_AVAILABLE[1], end), \
                 f"End date {end} must be <= {self.RANGE_AVAILABLE[1]}"
 
-        for dataset, interval in zip(self.SETS_NAMES, intervals):
-            dataset_obj = self.Dataset(data_path, interval, self.variables) if not residual else self.ResidualDataset(data_path, interval, self.variables)
+        for dataset_name, interval in zip(self.SETS_NAMES, intervals):
+            dataset_obj = self._make_dataset(residual, data_path, interval, self.variables)
+            dataset_obj.reproject(self.REPROJECT_FN(resampling, residual))
+
             if standardize:
-                if dataset == "train":
+                if dataset_name == "train":
                     self.standard_params = dataset_obj.fit_transform_std()
                 else:
                     dataset_obj.transform_std(self.standard_params)
-            dataset_obj.reproject(self.REPROJECT_FN(resampling, residual)) ### the order of std and reproject should be reversed to work with ResidualDataset
+
             dataset_obj.convert_to_tensors()
-            setattr(self, dataset, dataset_obj)
+            setattr(self, dataset_name, dataset_obj)
 
         print(f"\nReKIS dataset initalized.\ntrain size: ({len(self.train)})\ndev size: ({len(self.dev)})\ntest size: ({len(self.test)})\n")
+
+    def _make_dataset(self, residual: bool, data_path: str, interval: Tuple[str, str], variables: List[str]):
+        ds_class = self.ResidualDataset if residual else self.Dataset
+        return ds_class(data_path, interval, variables)
 
     def destandardize(self, input: List[torch.Tensor]) -> List[torch.Tensor]:
         _, C, _, _ = input[0].shape
@@ -174,10 +153,10 @@ class ReKIS:
         return output
 
     """Train dataset."""
-    train: Dataset
+    train: Union[Dataset, ResidualDataset]
 
     """Eval dataset."""
-    dev: Dataset
+    dev: Union[Dataset, ResidualDataset]
 
     """Test dataset."""
-    test: Dataset
+    test: Union[Dataset, ResidualDataset]
