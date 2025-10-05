@@ -21,7 +21,7 @@ parser.add_argument("--logdir", default="logs", type=str)
 parser.add_argument("--variables", default=["TM"], type=list)
 
 def main(args: argparse.Namespace) -> None:
-    cddlt.startup(args, os.path.basename(__file__))
+    cddlt.startup(args)
 
     tmp_root = tempfile.mkdtemp(prefix="cddlt_test_")
     data_root = os.path.join(tmp_root, "data")
@@ -48,7 +48,9 @@ def main(args: argparse.Namespace) -> None:
             train_len=("2000-01-01", "2000-02-01"),
             dev_len=("2000-02-01", "2000-03-01"),
             test_len=("2000-03-01", "2000-04-01"),
-            resampling="cubic_spline"
+            resampling="cubic_spline",
+            residual=False,
+            standardize=True
         )
 
         train = DownscalingTransform(rekis.train).dataloader(args.batch_size, shuffle=True)
@@ -71,7 +73,6 @@ def main(args: argparse.Namespace) -> None:
             variables=args.variables,
             dev_len=("2000-03-01", "2000-04-01"),
             test_len=("2000-04-01", "2000-06-01"),
-            resampling="cubic_spline"
         )
 
         dev = DownscalingTransform(cordex.dev).dataloader(args.batch_size)
