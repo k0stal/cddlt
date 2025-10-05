@@ -36,3 +36,4 @@ dependencies = [
 find = {} 
 
 [tool.setuptools_scm]
+local_scheme = "no-local-version"
