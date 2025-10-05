@@ -174,7 +174,6 @@ class DLModule(torch.nn.Module):
         y_preds = []
 
         for x, _ in dataloader:
-            x = x.to(self.device)
             y_pred = self.predict_step(x)
             y_preds.append(y_pred)
         return y_preds
@@ -186,6 +185,7 @@ class DLModule(torch.nn.Module):
     ) -> torch.Tensor:
 
         with torch.no_grad():
+            x = x.to(self.device)
             y_pred = self(x)
             return y_pred
 
