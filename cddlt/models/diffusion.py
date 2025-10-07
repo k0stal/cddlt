@@ -413,7 +413,6 @@ class Diffusion(cddlt.DLModule):
         rho: int = 7
     ) -> None:
         super().__init__()
-        self.params = params # standardization parameters targets (residuals)
         self.label_dim = label_dim
         self.num_steps = num_steps
         self.sigma_data = sigma_data
@@ -433,6 +432,9 @@ class Diffusion(cddlt.DLModule):
             out_channels=1,             # channel for high-res residual output
             label_dim=self.label_dim
         )
+
+        self.t_mean = torch.Tensor(params["mean"]) # standardization parameters for target (residuals)
+        self.t_std = torch.Tensor(params["std"])
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> None:
         input, _ = x
@@ -514,8 +516,7 @@ class Diffusion(cddlt.DLModule):
                 d_prime = (x_next - denoised) / t_next
                 x_next = x_hat + (t_next - t_hat) * (0.5 * d_cur + 0.5 * d_prime)
 
-        mean, std = self.params["mean"], self.params["std"]
-        destd_residual = x_next * std + mean
+        destd_residual = x_next * self.t_std.to(self.device) + self.t_mean.to(self.device)
         predicted = destd_residual + coarse
 
         return predicted

@@ -12,9 +12,9 @@ from cddlt.models.diffusion import Diffusion, residual_collate_fn, residual_tran
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", default=2, type=int)
-parser.add_argument("--epochs", default=1, type=int)
+parser.add_argument("--epochs", default=2, type=int)
 parser.add_argument("--seed", default=42, type=int)
-parser.add_argument("--threads", default=6, type=int)
+parser.add_argument("--threads", default=0, type=int)
 parser.add_argument("--upscale_factor", default=10, type=int)
 parser.add_argument("--lr", default=1e-4, type=float)
 parser.add_argument("--logdir", default="logs", type=str)
@@ -94,6 +94,15 @@ def main(args: argparse.Namespace) -> None:
     )
 
     print(f"--- DIFF ---")    
+
+    data = rekis.train[0]
+
+    for item in ["input", "target", "coarse", "fine"]:
+        print(f"{item}: {torch.min(data[item]), torch.max(data[item]), torch.std(data[item]), torch.mean(data[item])}")
+
+    diff.evaluate(rekis_dev, print_loss=True)
+
+    print(f"eval succesful")
 
     diff.fit(rekis_train, rekis_dev, args.epochs)
 
