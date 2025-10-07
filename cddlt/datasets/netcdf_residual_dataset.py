@@ -58,7 +58,7 @@ class NetCDFResidualDataset(NetCDFDataset):
 
         self.inputs = inputs
         self.targets = targets
-        self.coarse = inputs
+        self.coarse = inputs.copy()
         self.fine = self.dataset
 
     def convert_to_tensors(self) -> None:
