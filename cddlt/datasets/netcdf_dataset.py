@@ -52,15 +52,13 @@ class NetCDFDataset(torch.utils.data.Dataset):
         params = {}
 
         for var_name in sorted(self.dataset.data_vars):
-            mean = self.dataset[var_name].mean().values
-            std = self.dataset[var_name].std().values
+            mean = self.targets[var_name].mean().values
+            std = self.targets[var_name].std().values
             params[var_name] = {"mean": mean, "std": std}
+            self.targets[var_name] = (self.targets[var_name] - mean) / std
 
-            std_variable = (self.dataset[var_name] - mean) / std
-            self.dataset[var_name] = std_variable
-
-        self.inputs = self.dataset
-        self.targets = self.dataset
+        for var_name in sorted(self.dataset.data_vars):
+            self.inputs[var_name] = (self.inputs[var_name] - params[var_name]["mean"]) / params[var_name]["std"]
 
         return params
 
@@ -68,13 +66,14 @@ class NetCDFDataset(torch.utils.data.Dataset):
         assert len(self.dataset.data_vars) == len(params), \
             f"Dictionary should contain {len(self.dataset.data_vars)} variables."
 
-        for var_name in sorted(self.dataset.data_vars):
-            mean, std = params[var_name]["mean"], params[var_name]["std"]
-            std_variable = (self.dataset[var_name] - mean) / std
-            self.dataset[var_name] = std_variable
-
-        self.inputs = self.dataset
-        self.targets = self.dataset
+        for attr_name in ["inputs", "targets"]:
+            attr = getattr(self, attr_name)
+            for var_name in sorted(attr.data_vars):
+                mean = params[var_name]["mean"]
+                std = params[var_name]["std"]
+                std_variable = (attr[var_name] - mean) / std
+                attr[var_name] = std_variable
+            setattr(self, attr_name, attr)
     
     def reproject(
         self,
